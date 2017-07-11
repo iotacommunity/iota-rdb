@@ -1,0 +1,6 @@
+[package]
+name = "zmq2sql"
+version = "0.1.0"
+authors = ["Valentine Valyaeff <valentine.valyaeff@gmail.com>"]
+
+[dependencies]
