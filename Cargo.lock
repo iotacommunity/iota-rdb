@@ -1,5 +1,5 @@
 [root]
-name = "zmq2sql"
+name = "iota-rdb"
 version = "0.1.0"
 dependencies = [
  "mysql 11.3.0 (registry+https://github.com/rust-lang/crates.io-index)",

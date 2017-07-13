@@ -1,5 +1,5 @@
 [package]
-name = "zmq2sql"
+name = "iota-rdb"
 version = "0.1.0"
 authors = ["Valentine Valyaeff <valentine.valyaeff@gmail.com>"]
 license = "MIT"
