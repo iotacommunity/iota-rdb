@@ -3,6 +3,7 @@ use std::num::ParseIntError;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const MAX_TAG_LENGTH: usize = 27;
+const MILESTONE_ADDRESS: &str = "KPWCHICGJZXKE9GSUDXZYUAPLHAKAHYHDXNPHENTERYMMBQOPSQIDENXKLKCEYCPVTZQLEEJVYJZV9BWU";
 
 #[derive(Debug)]
 pub struct Transaction<'a> {
@@ -35,11 +36,39 @@ impl<'a> Transaction<'a> {
     })
   }
 
+  pub fn approve(mapper: &mut Mapper, mut ids: Vec<u64>) {
+    loop {
+      match ids.pop() {
+        None => break,
+        Some(id) => {
+          println!("APPROVE {:?}", id);
+          let mut row = mapper.select_transaction_by_id(id).unwrap();
+          if !row.take_opt("mst_a").unwrap().unwrap_or(false) {
+            let id_trunk = row.take_opt("id_trunk").unwrap().unwrap_or(0);
+            let id_branch = row.take_opt("id_branch").unwrap().unwrap_or(0);
+            if id_trunk != 0 {
+              ids.push(id_trunk);
+            }
+            if id_branch != 0 {
+              ids.push(id_branch);
+            }
+            if let Ok(0) = row.take_opt("current_idx").unwrap() {
+              if let Ok(id_bundle) = row.take_opt("id_bundle").unwrap() {
+                mapper.update_bundle(id_bundle, milliseconds_since_epoch());
+              }
+            }
+            mapper.approve_transaction(id);
+          }
+        }
+      }
+    }
+  }
+
   pub fn process(&self, mapper: &mut Mapper) {
-    let mut result = mapper.select_transaction(self.hash);
+    let mut result = mapper.select_transaction_by_hash(self.hash);
     if let Some(ref mut row) = result {
-      let id_trunk: Option<i64> = row.take("id_trunk");
-      let id_branch: Option<i64> = row.take("id_branch");
+      let id_trunk = row.take_opt("id_trunk").unwrap();
+      let id_branch = row.take_opt("id_branch").unwrap();
       if id_trunk.unwrap_or(0) != 0 && id_branch.unwrap_or(0) != 0 {
         return;
       }
@@ -52,6 +81,7 @@ impl<'a> Transaction<'a> {
       milliseconds_since_epoch(),
       self.last_index,
     );
+    let is_milestone = self.is_milestone();
     mapper.save_transaction(
       result.is_none(),
       self.hash,
@@ -64,7 +94,16 @@ impl<'a> Transaction<'a> {
       self.timestamp,
       self.current_index,
       self.last_index,
+      is_milestone,
+      is_milestone,
     );
+    if is_milestone {
+      Transaction::approve(mapper, vec![id_trunk, id_branch]);
+    }
+  }
+
+  fn is_milestone(&self) -> bool {
+    self.address_hash == MILESTONE_ADDRESS
   }
 }
 
