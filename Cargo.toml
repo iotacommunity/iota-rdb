@@ -5,3 +5,4 @@ authors = ["Valentine Valyaeff <valentine.valyaeff@gmail.com>"]
 
 [dependencies]
 zmq = "0.8"
+mysql = "11"

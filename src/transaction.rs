@@ -1,4 +1,8 @@
+use mapper::Mapper;
 use std::num::ParseIntError;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+const MAX_TAG_LENGTH: usize = 27;
 
 #[derive(Debug)]
 pub struct Transaction<'a> {
@@ -30,4 +34,42 @@ impl<'a> Transaction<'a> {
       branch_hash: chunks[10],
     })
   }
+
+  pub fn process(&self, mapper: &mut Mapper) {
+    let mut result = mapper.select_transaction(self.hash);
+    if let Some(ref mut row) = result {
+      let id_trunk: Option<i64> = row.take("id_trunk");
+      let id_branch: Option<i64> = row.take("id_branch");
+      if id_trunk.unwrap_or(0) != 0 && id_branch.unwrap_or(0) != 0 {
+        return;
+      }
+    }
+    let id_trunk = mapper.insert_or_select_transaction(self.branch_hash);
+    let id_branch = mapper.insert_or_select_transaction(self.branch_hash);
+    let id_address = mapper.insert_or_select_address(self.address_hash);
+    let id_bundle = mapper.insert_bundle(
+      self.bundle_hash,
+      milliseconds_since_epoch(),
+      self.last_index,
+    );
+    mapper.save_transaction(
+      result.is_none(),
+      self.hash,
+      id_trunk,
+      id_branch,
+      id_address,
+      id_bundle,
+      &self.tag[..MAX_TAG_LENGTH],
+      self.value,
+      self.timestamp,
+      self.current_index,
+      self.last_index,
+    );
+  }
+}
+
+fn milliseconds_since_epoch() -> f64 {
+  let duration = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+  duration.as_secs() as f64 * 1000.0 +
+    (duration.subsec_nanos() / 1_000_000) as f64
 }
