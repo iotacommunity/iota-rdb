@@ -22,13 +22,13 @@ const MYSQL_URI: &str = "mysql://root:password@127.0.0.1:\
                          3306/iota?prefer_socket=false";
 
 fn main() {
-  let pool = mysql::Pool::new(MYSQL_URI).unwrap();
+  let pool = mysql::Pool::new(MYSQL_URI).expect("MySQL connect failure");
   let ctx = zmq::Context::new();
-  let socket = ctx.socket(zmq::SUB).unwrap();
+  let socket = ctx.socket(zmq::SUB).expect("ZMQ socket create failure");
   let (write_tx, write_rx) = mpsc::channel::<String>();
   let (approve_tx, approve_rx) = mpsc::channel::<Vec<u64>>();
-  socket.connect(ZMQ_URI).unwrap();
-  socket.set_subscribe(b"tx ").unwrap();
+  socket.connect(ZMQ_URI).expect("ZMQ socket connect failure");
+  socket.set_subscribe(b"tx ").expect("ZMQ subscribe failure");
   spawn_write_workers(&pool, write_rx, &approve_tx);
   spawn_approve_workers(&pool, approve_rx);
   zmq_listen(&socket, &write_tx);
