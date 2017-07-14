@@ -17,12 +17,12 @@ fn main() {
   let pool = mysql::Pool::new(
     "mysql://root:password@127.0.0.1:3306/iota?prefer_socket=false",
   ).unwrap();
-  let mut mapper = Mapper::prepare(&pool);
+  let mut mapper = Mapper::new(&pool).unwrap();
 
   loop {
     let message = socket.recv_string(0).unwrap().unwrap();
     let transaction = Transaction::parse(&message).unwrap();
     println!("{:?}", transaction);
-    transaction.process(&mut mapper);
+    transaction.process(&mut mapper).unwrap();
   }
 }
