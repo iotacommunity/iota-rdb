@@ -2,9 +2,7 @@ mod error;
 
 pub use self::error::{Error, Result};
 use mapper::{self, Mapper};
-use std::num::ParseIntError;
-use std::result;
-use std::time::{SystemTime, SystemTimeError, UNIX_EPOCH};
+use utils;
 
 const MAX_TAG_LENGTH: usize = 27;
 const MILESTONE_ADDRESS: &str = "KPWCHICGJZXKE9GSUDXZYUAPLHAKAHYHDXNPHENTERYMMBQOPSQIDENXKLKCEYCPVTZQLEEJVYJZV9BWU";
@@ -24,7 +22,7 @@ pub struct Transaction<'a> {
 }
 
 impl<'a> Transaction<'a> {
-  pub fn parse(source: &'a str) -> result::Result<Self, ParseIntError> {
+  pub fn parse(source: &'a str) -> Result<Self> {
     let chunks: Vec<&'a str> = source.split(' ').collect();
     Ok(Transaction {
       hash: chunks[1],
@@ -45,7 +43,6 @@ impl<'a> Transaction<'a> {
       match ids.pop() {
         None => break,
         Some(id) => {
-          println!("approving {:?}", id);
           let mut row = mapper.select_transaction_by_id(id)?.ok_or(
             mapper::Error::RecordNotFound,
           )?;
@@ -74,7 +71,8 @@ impl<'a> Transaction<'a> {
                 mapper::Error::ColumnNotFound,
               )?;
               if let Ok(id_bundle) = id_bundle {
-                mapper.update_bundle(id_bundle, milliseconds_since_epoch()?)?;
+                let confirmed = utils::milliseconds_since_epoch()?;
+                mapper.update_bundle(id_bundle, confirmed)?;
               }
             }
             mapper.approve_transaction(id)?;
@@ -98,12 +96,16 @@ impl<'a> Transaction<'a> {
         return Ok(None);
       }
     }
-    let id_trunk = mapper.insert_or_select_transaction(self.trunk_hash)?;
-    let id_branch = mapper.insert_or_select_transaction(self.branch_hash)?;
+    let id_trunk = mapper.insert_or_select_and_approve_transaction(
+      self.trunk_hash,
+    )?;
+    let id_branch = mapper.insert_or_select_and_approve_transaction(
+      self.branch_hash,
+    )?;
     let id_address = mapper.insert_or_select_address(self.address_hash)?;
     let id_bundle = mapper.insert_or_select_bundle(
       self.bundle_hash,
-      milliseconds_since_epoch()?,
+      utils::milliseconds_since_epoch()?,
       self.last_index,
     )?;
     let is_milestone = self.is_milestone();
@@ -136,12 +138,4 @@ impl<'a> Transaction<'a> {
   fn is_milestone(&self) -> bool {
     self.address_hash == MILESTONE_ADDRESS
   }
-}
-
-fn milliseconds_since_epoch() -> result::Result<f64, SystemTimeError> {
-  let duration = SystemTime::now().duration_since(UNIX_EPOCH)?;
-  Ok(
-    duration.as_secs() as f64 * 1000.0 +
-      (duration.subsec_nanos() / 1_000_000) as f64,
-  )
 }

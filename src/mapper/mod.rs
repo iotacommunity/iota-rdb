@@ -12,6 +12,7 @@ pub struct Mapper<'a> {
   insert_transaction_placeholder: mysql::Stmt<'a>,
   update_transaction: mysql::Stmt<'a>,
   approve_transaction: mysql::Stmt<'a>,
+  direct_approve_transaction: mysql::Stmt<'a>,
   select_addresses: mysql::Stmt<'a>,
   insert_address: mysql::Stmt<'a>,
   select_bundles: mysql::Stmt<'a>,
@@ -48,29 +49,34 @@ impl<'a> Mapper<'a> {
       )?,
       insert_transaction_placeholder: pool.prepare(
         r#"
-          INSERT INTO tx (hash) VALUES (:hash)
+          INSERT INTO tx (hash, da) VALUES (:hash, 1)
         "#,
       )?,
       update_transaction: pool.prepare(
         r#"
-            UPDATE tx SET
-              id_trunk = :id_trunk,
-              id_branch = :id_branch,
-              id_address = :id_address,
-              id_bundle = :id_bundle,
-              tag = :tag,
-              value = :value,
-              timestamp = :timestamp,
-              current_idx = :current_idx,
-              last_idx = :last_idx,
-              is_mst = :is_mst,
-              mst_a = :mst_a
-            WHERE hash = :hash
-          "#,
+          UPDATE tx SET
+            id_trunk = :id_trunk,
+            id_branch = :id_branch,
+            id_address = :id_address,
+            id_bundle = :id_bundle,
+            tag = :tag,
+            value = :value,
+            timestamp = :timestamp,
+            current_idx = :current_idx,
+            last_idx = :last_idx,
+            is_mst = :is_mst,
+            mst_a = :mst_a
+          WHERE hash = :hash
+        "#,
       )?,
       approve_transaction: pool.prepare(
         r#"
           UPDATE tx SET mst_a = :mst_a WHERE id_tx = :id_tx
+        "#,
+      )?,
+      direct_approve_transaction: pool.prepare(
+        r#"
+          UPDATE tx SET da = da + 1 WHERE id_tx = :id_tx
         "#,
       )?,
       select_addresses: pool.prepare(
@@ -145,19 +151,26 @@ impl<'a> Mapper<'a> {
     })?)
   }
 
-  pub fn insert_or_select_transaction(&mut self, hash: &str) -> Result<u64> {
+  pub fn insert_or_select_and_approve_transaction(
+    &mut self,
+    hash: &str,
+  ) -> Result<u64> {
     let insert_result = self.insert_transaction_placeholder.execute(params!{
       "hash" => hash,
     });
     match insert_result {
       Ok(result) => Ok(result.last_insert_id()),
       Err(_) => {
-        Ok(self
+        let id_tx = self
           .select_transactions_by_hash
           .first_exec(params!{"hash" => hash})?
           .ok_or(Error::RecordNotFound)?
           .take_opt("id_tx")
-          .ok_or(Error::ColumnNotFound)??)
+          .ok_or(Error::ColumnNotFound)??;
+        self.direct_approve_transaction.execute(params!{
+          "id_tx" => id_tx
+        })?;
+        Ok(id_tx)
       }
     }
   }

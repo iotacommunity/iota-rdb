@@ -11,6 +11,7 @@ mod transaction;
 mod mapper;
 #[macro_use]
 mod macros;
+mod utils;
 
 use clap::Arg;
 use mapper::Mapper;
