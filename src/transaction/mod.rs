@@ -45,7 +45,7 @@ impl<'a> Transaction<'a> {
       match ids.pop() {
         None => break,
         Some(id) => {
-          println!("APPROVE {:?}", id);
+          println!("approving {:?}", id);
           let mut row = mapper.select_transaction_by_id(id)?.ok_or(
             mapper::Error::RecordNotFound,
           )?;
@@ -85,7 +85,7 @@ impl<'a> Transaction<'a> {
     Ok(())
   }
 
-  pub fn process(&self, mapper: &mut Mapper) -> Result<()> {
+  pub fn process(&self, mapper: &mut Mapper) -> Result<Option<Vec<u64>>> {
     let mut result = mapper.select_transaction_by_hash(self.hash)?;
     if let Some(ref mut row) = result {
       let id_trunk = row.take_opt("id_trunk").ok_or(
@@ -95,10 +95,10 @@ impl<'a> Transaction<'a> {
         mapper::Error::ColumnNotFound,
       )?;
       if id_trunk.unwrap_or(0) != 0 && id_branch.unwrap_or(0) != 0 {
-        return Ok(());
+        return Ok(None);
       }
     }
-    let id_trunk = mapper.insert_or_select_transaction(self.branch_hash)?;
+    let id_trunk = mapper.insert_or_select_transaction(self.trunk_hash)?;
     let id_branch = mapper.insert_or_select_transaction(self.branch_hash)?;
     let id_address = mapper.insert_or_select_address(self.address_hash)?;
     let id_bundle = mapper.insert_bundle(
@@ -127,9 +127,10 @@ impl<'a> Transaction<'a> {
       mapper.update_transaction(transaction)?;
     }
     if is_milestone {
-      Transaction::approve(mapper, vec![id_trunk, id_branch])?;
+      Ok(Some(vec![id_trunk, id_branch]))
+    } else {
+      Ok(None)
     }
-    Ok(())
   }
 
   fn is_milestone(&self) -> bool {
