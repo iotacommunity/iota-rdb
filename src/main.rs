@@ -1,3 +1,6 @@
+#![cfg_attr(feature="clippy", feature(plugin))]
+#![cfg_attr(feature="clippy", plugin(clippy))]
+
 #[macro_use]
 extern crate mysql;
 extern crate zmq;
@@ -12,7 +15,7 @@ fn main() {
   let ctx = zmq::Context::new();
   let socket = ctx.socket(zmq::SUB).unwrap();
   socket.connect("tcp://88.99.93.196:5556").unwrap();
-  socket.set_subscribe("tx ".as_bytes()).unwrap();
+  socket.set_subscribe(b"tx ").unwrap();
 
   let pool = mysql::Pool::new(
     "mysql://root:password@127.0.0.1:3306/iota?prefer_socket=false",

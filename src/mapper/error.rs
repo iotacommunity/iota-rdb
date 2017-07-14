@@ -32,8 +32,7 @@ impl error::Error for Error {
   fn cause(&self) -> Option<&error::Error> {
     match *self {
       Error::Mysql(ref err) => Some(err),
-      Error::RecordNotFound => None,
-      Error::ColumnNotFound => None,
+      Error::RecordNotFound | Error::ColumnNotFound => None,
     }
   }
 }

@@ -16,6 +16,21 @@ pub struct Mapper<'a> {
   update_bundle: mysql::Stmt<'a>,
 }
 
+pub struct Transaction<'a> {
+  pub hash: &'a str,
+  pub id_trunk: u64,
+  pub id_branch: u64,
+  pub id_address: u64,
+  pub id_bundle: u64,
+  pub tag: &'a str,
+  pub value: i64,
+  pub timestamp: i64,
+  pub current_idx: i32,
+  pub last_idx: i32,
+  pub is_mst: bool,
+  pub mst_a: bool,
+}
+
 impl<'a> Mapper<'a> {
   pub fn new(pool: &mysql::Pool) -> Result<Self> {
     Ok(Mapper {
@@ -120,18 +135,7 @@ impl<'a> Mapper<'a> {
   pub fn save_transaction(
     &mut self,
     insert: bool,
-    hash: &str,
-    id_trunk: u64,
-    id_branch: u64,
-    id_address: u64,
-    id_bundle: u64,
-    tag: &str,
-    value: i64,
-    timestamp: i64,
-    current_index: i32,
-    last_index: i32,
-    is_milestone: bool,
-    milestone_approved: bool,
+    transaction: Transaction,
   ) -> Result<mysql::QueryResult> {
     let statement = if insert {
       &mut self.insert_transaction
@@ -139,18 +143,18 @@ impl<'a> Mapper<'a> {
       &mut self.update_transaction
     };
     Ok(statement.execute(params!{
-      "hash" => hash,
-      "id_trunk" => id_trunk,
-      "id_branch" => id_branch,
-      "id_address" => id_address,
-      "id_bundle" => id_bundle,
-      "tag" => tag,
-      "value" => value,
-      "timestamp" => timestamp,
-      "current_idx" => current_index,
-      "last_idx" => last_index,
-      "is_mst" => is_milestone,
-      "mst_a" => milestone_approved,
+      "hash" => transaction.hash,
+      "id_trunk" => transaction.id_trunk,
+      "id_branch" => transaction.id_branch,
+      "id_address" => transaction.id_address,
+      "id_bundle" => transaction.id_bundle,
+      "tag" => transaction.tag,
+      "value" => transaction.value,
+      "timestamp" => transaction.timestamp,
+      "current_idx" => transaction.current_idx,
+      "last_idx" => transaction.last_idx,
+      "is_mst" => transaction.is_mst,
+      "mst_a" => transaction.mst_a,
     })?)
   }
 

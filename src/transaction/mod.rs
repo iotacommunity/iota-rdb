@@ -107,21 +107,21 @@ impl<'a> Transaction<'a> {
       self.last_index,
     )?;
     let is_milestone = self.is_milestone();
-    mapper.save_transaction(
-      result.is_none(),
-      self.hash,
-      id_trunk,
-      id_branch,
-      id_address,
-      id_bundle,
-      &self.tag[..MAX_TAG_LENGTH],
-      self.value,
-      self.timestamp,
-      self.current_index,
-      self.last_index,
-      is_milestone,
-      is_milestone,
-    )?;
+    let transaction = mapper::Transaction {
+      hash: self.hash,
+      id_trunk: id_trunk,
+      id_branch: id_branch,
+      id_address: id_address,
+      id_bundle: id_bundle,
+      tag: &self.tag[..MAX_TAG_LENGTH],
+      value: self.value,
+      timestamp: self.timestamp,
+      current_idx: self.current_index,
+      last_idx: self.last_index,
+      is_mst: is_milestone,
+      mst_a: is_milestone,
+    };
+    mapper.save_transaction(result.is_none(), transaction)?;
     if is_milestone {
       Transaction::approve(mapper, vec![id_trunk, id_branch])?;
     }
