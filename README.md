@@ -43,4 +43,10 @@ $ iota-rdb \
     --approve-threads 4
 ```
 
+You can view available options by running with `--help` argument:
+
+```sh
+$ iota-rdb --help
+```
+
 [rust]: https://www.rust-lang.org/
