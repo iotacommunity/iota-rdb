@@ -5,6 +5,7 @@ authors = ["Valentine Valyaeff <valentine.valyaeff@gmail.com>"]
 license = "MIT"
 
 [dependencies]
+clap = "2"
 zmq = "0.8"
 mysql = "11"
 clippy = {version = "*", optional = true}
