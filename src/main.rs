@@ -57,6 +57,9 @@ fn main() {
         .default_value("1")
         .help("Count of milestone approval worker threads"),
     )
+    .arg(Arg::with_name("VERBOSE").short("v").long("verbose").help(
+      "Prints flowing messages",
+    ))
     .get_matches();
   let zmq_uri = matches.value_of("ZMQ_URI").expect(
     "ZMQ_URI were not provided",
@@ -76,6 +79,7 @@ fn main() {
       .expect("APPROVE_THREADS_COUNT were not provided")
       .parse()
       .expect("APPROVE_THREADS_COUNT not a number");
+  let verbose = matches.is_present("VERBOSE");
 
   let pool = mysql::Pool::new(mysql_uri).expect("MySQL connect failure");
   let ctx = zmq::Context::new();
@@ -84,17 +88,29 @@ fn main() {
   let (approve_tx, approve_rx) = mpsc::channel::<Vec<u64>>();
   socket.connect(zmq_uri).expect("ZMQ socket connect failure");
   socket.set_subscribe(b"tx ").expect("ZMQ subscribe failure");
-  spawn_write_workers(&pool, write_rx, &approve_tx, write_threads_count);
-  spawn_approve_workers(&pool, approve_rx, approve_threads_count);
+  spawn_write_workers(
+    &pool,
+    write_rx,
+    &approve_tx,
+    write_threads_count,
+    verbose,
+  );
+  spawn_approve_workers(&pool, approve_rx, approve_threads_count, verbose);
   zmq_listen(&socket, &write_tx);
 }
 
 fn zmq_listen(socket: &zmq::Socket, tx: &mpsc::Sender<String>) {
   loop {
     match socket.recv_string(0) {
-      Ok(Ok(string)) => tx.send(string).expect("Thread communication failure"),
-      Ok(Err(err)) => eprintln!("Unexpected byte sequence: {:?}", err),
-      Err(err) => eprintln!("{}", err),
+      Ok(Ok(string)) => {
+        tx.send(string).expect("Thread communication failure");
+      }
+      Ok(Err(err)) => {
+        eprintln!("Unexpected byte sequence: {:?}", err);
+      }
+      Err(err) => {
+        eprintln!("{}", err);
+      }
     }
   }
 }
@@ -104,6 +120,7 @@ fn spawn_write_workers(
   rx: mpsc::Receiver<String>,
   tx: &mpsc::Sender<Vec<u64>>,
   threads_count: usize,
+  verbose: bool,
 ) {
   let rx = Arc::new(Mutex::new(rx));
   for i in 0..threads_count {
@@ -116,13 +133,21 @@ fn spawn_write_workers(
         Ok(transaction) => {
           match transaction.process(&mut mapper) {
             Ok(Some(vec)) => {
-              tx.send(vec).expect("Thread communication failure")
+              tx.send(vec).expect("Thread communication failure");
             }
-            Ok(None) => println!("write_thread#{} {:?}", i, transaction),
-            Err(err) => eprintln!("Transaction processing error: {}", err),
+            Ok(None) => {
+              if verbose {
+                println!("write_thread#{} {:?}", i, transaction);
+              }
+            }
+            Err(err) => {
+              eprintln!("Transaction processing error: {}", err);
+            }
           }
         }
-        Err(err) => eprintln!("Transaction parsing error: {}", err),
+        Err(err) => {
+          eprintln!("Transaction parsing error: {}", err);
+        }
       }
     });
   }
@@ -132,6 +157,7 @@ fn spawn_approve_workers(
   pool: &mysql::Pool,
   rx: mpsc::Receiver<Vec<u64>>,
   threads_count: usize,
+  verbose: bool,
 ) {
   let rx = Arc::new(Mutex::new(rx));
   for i in 0..threads_count {
@@ -141,8 +167,14 @@ fn spawn_approve_workers(
       let rx = rx.lock().expect("Mutex is poisoned");
       let vec = rx.recv().expect("Thread communication failure");
       match Transaction::approve(&mut mapper, vec.clone()) {
-        Ok(()) => println!("approve_thread#{} {:?}", i, vec),
-        Err(err) => eprintln!("Transaction approve error: {}", err),
+        Ok(()) => {
+          if verbose {
+            println!("approve_thread#{} {:?}", i, vec);
+          }
+        }
+        Err(err) => {
+          eprintln!("Transaction approve error: {}", err);
+        }
       }
     });
   }
