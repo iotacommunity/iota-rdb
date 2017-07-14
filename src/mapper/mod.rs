@@ -1,6 +1,8 @@
-pub mod error;
+mod error;
+mod transaction;
 
 pub use self::error::{Error, Result};
+pub use self::transaction::Transaction;
 use mysql;
 
 pub struct Mapper<'a> {
@@ -14,21 +16,6 @@ pub struct Mapper<'a> {
   insert_address: mysql::Stmt<'a>,
   insert_bundle: mysql::Stmt<'a>,
   update_bundle: mysql::Stmt<'a>,
-}
-
-pub struct Transaction<'a> {
-  pub hash: &'a str,
-  pub id_trunk: u64,
-  pub id_branch: u64,
-  pub id_address: u64,
-  pub id_bundle: u64,
-  pub tag: &'a str,
-  pub value: i64,
-  pub timestamp: i64,
-  pub current_idx: i32,
-  pub last_idx: i32,
-  pub is_mst: bool,
-  pub mst_a: bool,
 }
 
 impl<'a> Mapper<'a> {
@@ -132,30 +119,18 @@ impl<'a> Mapper<'a> {
     })?)
   }
 
-  pub fn save_transaction(
+  pub fn insert_transaction(
     &mut self,
-    insert: bool,
     transaction: Transaction,
   ) -> Result<mysql::QueryResult> {
-    let statement = if insert {
-      &mut self.insert_transaction
-    } else {
-      &mut self.update_transaction
-    };
-    Ok(statement.execute(params!{
-      "hash" => transaction.hash,
-      "id_trunk" => transaction.id_trunk,
-      "id_branch" => transaction.id_branch,
-      "id_address" => transaction.id_address,
-      "id_bundle" => transaction.id_bundle,
-      "tag" => transaction.tag,
-      "value" => transaction.value,
-      "timestamp" => transaction.timestamp,
-      "current_idx" => transaction.current_idx,
-      "last_idx" => transaction.last_idx,
-      "is_mst" => transaction.is_mst,
-      "mst_a" => transaction.mst_a,
-    })?)
+    Ok(self.insert_transaction.execute(transaction.to_params())?)
+  }
+
+  pub fn update_transaction(
+    &mut self,
+    transaction: Transaction,
+  ) -> Result<mysql::QueryResult> {
+    Ok(self.update_transaction.execute(transaction.to_params())?)
   }
 
   pub fn approve_transaction(&mut self, id: u64) -> Result<mysql::QueryResult> {

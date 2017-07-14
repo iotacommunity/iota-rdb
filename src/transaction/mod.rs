@@ -1,4 +1,4 @@
-pub mod error;
+mod error;
 
 pub use self::error::{Error, Result};
 use mapper::{self, Mapper};
@@ -121,7 +121,11 @@ impl<'a> Transaction<'a> {
       is_mst: is_milestone,
       mst_a: is_milestone,
     };
-    mapper.save_transaction(result.is_none(), transaction)?;
+    if result.is_none() {
+      mapper.insert_transaction(transaction)?;
+    } else {
+      mapper.update_transaction(transaction)?;
+    }
     if is_milestone {
       Transaction::approve(mapper, vec![id_trunk, id_branch])?;
     }
