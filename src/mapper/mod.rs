@@ -14,6 +14,7 @@ pub struct Mapper<'a> {
   approve_transaction: mysql::Stmt<'a>,
   select_addresses: mysql::Stmt<'a>,
   insert_address: mysql::Stmt<'a>,
+  select_bundles: mysql::Stmt<'a>,
   insert_bundle: mysql::Stmt<'a>,
   update_bundle: mysql::Stmt<'a>,
 }
@@ -80,6 +81,11 @@ impl<'a> Mapper<'a> {
       insert_address: pool.prepare(
         r#"
           INSERT INTO address (address) VALUES (:address)
+        "#,
+      )?,
+      select_bundles: pool.prepare(
+        r#"
+          SELECT id_bundle FROM bundle WHERE bundle = :bundle
         "#,
       )?,
       insert_bundle: pool.prepare(
@@ -173,22 +179,28 @@ impl<'a> Mapper<'a> {
     }
   }
 
-  pub fn insert_bundle(
+  pub fn insert_or_select_bundle(
     &mut self,
     bundle: &str,
     created: f64,
     size: i32,
   ) -> Result<u64> {
-    Ok(
-      self
-        .insert_bundle
-        .execute(params!{
-        "bundle" => bundle,
-        "created" => created,
-        "size" => size,
-      })?
-        .last_insert_id(),
-    )
+    let insert_result = self.insert_bundle.execute(params!{
+      "bundle" => bundle,
+      "created" => created,
+      "size" => size,
+    });
+    match insert_result {
+      Ok(result) => Ok(result.last_insert_id()),
+      Err(_) => {
+        Ok(self
+          .select_bundles
+          .first_exec(params!{"bundle" => bundle})?
+          .ok_or(Error::RecordNotFound)?
+          .take_opt("id_bundle")
+          .ok_or(Error::ColumnNotFound)??)
+      }
+    }
   }
 
   pub fn update_bundle(

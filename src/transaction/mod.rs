@@ -101,7 +101,7 @@ impl<'a> Transaction<'a> {
     let id_trunk = mapper.insert_or_select_transaction(self.trunk_hash)?;
     let id_branch = mapper.insert_or_select_transaction(self.branch_hash)?;
     let id_address = mapper.insert_or_select_address(self.address_hash)?;
-    let id_bundle = mapper.insert_bundle(
+    let id_bundle = mapper.insert_or_select_bundle(
       self.bundle_hash,
       milliseconds_since_epoch()?,
       self.last_index,
