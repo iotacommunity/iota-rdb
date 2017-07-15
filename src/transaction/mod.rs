@@ -5,7 +5,6 @@ use mapper::{self, Mapper};
 use utils;
 
 const MAX_TAG_LENGTH: usize = 27;
-const MILESTONE_ADDRESS: &str = "KPWCHICGJZXKE9GSUDXZYUAPLHAKAHYHDXNPHENTERYMMBQOPSQIDENXKLKCEYCPVTZQLEEJVYJZV9BWU";
 
 #[derive(Debug)]
 pub struct Transaction<'a> {
@@ -83,7 +82,11 @@ impl<'a> Transaction<'a> {
     Ok(())
   }
 
-  pub fn process(&self, mapper: &mut Mapper) -> Result<Option<Vec<u64>>> {
+  pub fn process(
+    &self,
+    mapper: &mut Mapper,
+    milestone_address: &str,
+  ) -> Result<Option<Vec<u64>>> {
     let mut result = mapper.select_transaction_by_hash(self.hash)?;
     if let Some(ref mut row) = result {
       let id_trunk = row.take_opt("id_trunk").ok_or(
@@ -108,7 +111,7 @@ impl<'a> Transaction<'a> {
       utils::milliseconds_since_epoch()?,
       self.last_index,
     )?;
-    let is_milestone = self.is_milestone();
+    let is_milestone = self.is_milestone(milestone_address);
     let transaction = mapper::Transaction {
       hash: self.hash,
       id_trunk: id_trunk,
@@ -135,7 +138,7 @@ impl<'a> Transaction<'a> {
     }
   }
 
-  fn is_milestone(&self) -> bool {
-    self.address_hash == MILESTONE_ADDRESS
+  fn is_milestone(&self, milestone_address: &str) -> bool {
+    self.address_hash == milestone_address
   }
 }

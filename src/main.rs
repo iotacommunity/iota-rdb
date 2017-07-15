@@ -19,6 +19,8 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use transaction::Transaction;
 
+const DEFAULT_MILESTONE_ADDRESS: &str = "KPWCHICGJZXKE9GSUDXZYUAPLHAKAHYHDXNPHENTERYMMBQOPSQIDENXKLKCEYCPVTZQLEEJVYJZV9BWU";
+
 fn main() {
   let matches = app_from_crate!()
     .arg(
@@ -57,6 +59,15 @@ fn main() {
         .default_value("1")
         .help("Count of milestone approval worker threads"),
     )
+    .arg(
+      Arg::with_name("MILESTONE_ADDRESS")
+        .short("s")
+        .long("milestone-address")
+        .takes_value(true)
+        .value_name("ADDRESS")
+        .default_value(DEFAULT_MILESTONE_ADDRESS)
+        .help("Count of milestone approval worker threads"),
+    )
     .arg(Arg::with_name("VERBOSE").short("v").long("verbose").help(
       "Prints flowing messages",
     ))
@@ -79,6 +90,9 @@ fn main() {
       .expect("APPROVE_THREADS_COUNT were not provided")
       .parse()
       .expect("APPROVE_THREADS_COUNT not a number");
+  let milestone_address = matches.value_of("MILESTONE_ADDRESS").expect(
+    "MILESTONE_ADDRESS were not provided",
+  );
   let verbose = matches.is_present("VERBOSE");
 
   let pool = mysql::Pool::new(mysql_uri).expect("MySQL connect failure");
@@ -92,6 +106,7 @@ fn main() {
     &pool,
     write_rx,
     &approve_tx,
+    milestone_address,
     write_threads_count,
     verbose,
   );
@@ -119,6 +134,7 @@ fn spawn_write_workers(
   pool: &mysql::Pool,
   rx: mpsc::Receiver<String>,
   tx: &mpsc::Sender<Vec<u64>>,
+  milestone_address: &str,
   threads_count: usize,
   verbose: bool,
 ) {
@@ -126,12 +142,13 @@ fn spawn_write_workers(
   for i in 0..threads_count {
     let (tx, rx) = (tx.clone(), rx.clone());
     let mut mapper = Mapper::new(pool).expect("MySQL mapper failure");
+    let milestone_address = milestone_address.to_owned();
     thread::spawn(move || loop {
       let rx = rx.lock().expect("Mutex is poisoned");
       let string = rx.recv().expect("Thread communication failure");
       match Transaction::parse(&string) {
         Ok(transaction) => {
-          match transaction.process(&mut mapper) {
+          match transaction.process(&mut mapper, &milestone_address) {
             Ok(Some(vec)) => {
               tx.send(vec).expect("Thread communication failure");
             }
