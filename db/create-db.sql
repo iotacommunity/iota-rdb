@@ -40,7 +40,7 @@ DROP TABLE IF EXISTS `txload`;
 CREATE TABLE `txload` (
   `id_txload` int(11) NOT NULL AUTO_INCREMENT,
   `event` char(3) NOT NULL,
-  `timestamp` int(11) NOT NULL,
+  `timestamp` double NOT NULL,
   PRIMARY KEY (`id_txload`),
   KEY `event_INDEX` (`event`),
   KEY `timestamp_INDEX` (`timestamp`)
