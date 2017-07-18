@@ -40,11 +40,11 @@ impl<'a> Mapper<'a> {
       insert_transaction: pool.prepare(
         r#"
           INSERT INTO tx (
-            hash, id_trunk, id_branch, id_address, id_bundle, tag, value,
+            id_tx, hash, id_trunk, id_branch, id_address, id_bundle, tag, value,
             timestamp, current_idx, last_idx, is_mst, mst_a
           ) VALUES (
-            :hash, :id_trunk, :id_branch, :id_address, :id_bundle, :tag, :value,
-            :timestamp, :current_idx, :last_idx, :is_mst, :mst_a
+            :id_tx, :hash, :id_trunk, :id_branch, :id_address, :id_bundle, :tag,
+            :value, :timestamp, :current_idx, :last_idx, :is_mst, :mst_a
           )
         "#,
       )?,
@@ -138,9 +138,13 @@ impl<'a> Mapper<'a> {
 
   pub fn insert_transaction(
     &mut self,
+    counters: &Counters,
     transaction: Transaction,
   ) -> Result<mysql::QueryResult> {
-    Ok(self.insert_transaction.execute(transaction.to_params())?)
+    let id_tx = counters.next_transaction();
+    let mut params = transaction.to_params();
+    params.push(("id_tx".to_owned(), mysql::Value::from(id_tx)));
+    Ok(self.insert_transaction.execute(params)?)
   }
 
   pub fn update_transaction(

@@ -126,7 +126,7 @@ impl<'a> Transaction<'a> {
       mst_a: is_milestone,
     };
     if result.is_none() {
-      mapper.insert_transaction(transaction)?;
+      mapper.insert_transaction(counters, transaction)?;
     } else {
       mapper.update_transaction(transaction)?;
     }

@@ -104,6 +104,11 @@ fn main() {
   let socket = ctx.socket(zmq::SUB).expect("ZMQ socket create failure");
   let (write_tx, write_rx) = mpsc::channel::<String>();
   let (approve_tx, approve_rx) = mpsc::channel::<Vec<u64>>();
+
+  if verbose {
+    println!("{:?}", counters);
+  }
+
   socket.connect(zmq_uri).expect("ZMQ socket connect failure");
   socket.set_subscribe(b"tx ").expect("ZMQ subscribe failure");
   spawn_write_workers(
