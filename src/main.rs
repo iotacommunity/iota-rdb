@@ -8,12 +8,14 @@ extern crate zmq;
 extern crate mysql;
 
 mod transaction;
+mod counters;
 mod mapper;
 #[macro_use]
 mod macros;
 mod utils;
 
 use clap::Arg;
+use counters::Counters;
 use mapper::Mapper;
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
@@ -96,6 +98,8 @@ fn main() {
   let verbose = matches.is_present("VERBOSE");
 
   let pool = mysql::Pool::new(mysql_uri).expect("MySQL connect failure");
+  let counters =
+    Arc::new(Counters::new(&pool).expect("MySQL counters failure"));
   let ctx = zmq::Context::new();
   let socket = ctx.socket(zmq::SUB).expect("ZMQ socket create failure");
   let (write_tx, write_rx) = mpsc::channel::<String>();
@@ -104,6 +108,7 @@ fn main() {
   socket.set_subscribe(b"tx ").expect("ZMQ subscribe failure");
   spawn_write_workers(
     &pool,
+    counters,
     write_rx,
     &approve_tx,
     milestone_address,
@@ -132,6 +137,7 @@ fn zmq_listen(socket: &zmq::Socket, tx: &mpsc::Sender<String>) {
 
 fn spawn_write_workers(
   pool: &mysql::Pool,
+  counters: Arc<Counters>,
   rx: mpsc::Receiver<String>,
   tx: &mpsc::Sender<Vec<u64>>,
   milestone_address: &str,
@@ -140,7 +146,7 @@ fn spawn_write_workers(
 ) {
   let rx = Arc::new(Mutex::new(rx));
   for i in 0..threads_count {
-    let (tx, rx) = (tx.clone(), rx.clone());
+    let (tx, rx, counters) = (tx.clone(), rx.clone(), counters.clone());
     let mut mapper = Mapper::new(pool).expect("MySQL mapper failure");
     let milestone_address = milestone_address.to_owned();
     thread::spawn(move || loop {
@@ -148,7 +154,11 @@ fn spawn_write_workers(
       let string = rx.recv().expect("Thread communication failure");
       match Transaction::parse(&string) {
         Ok(transaction) => {
-          match transaction.process(&mut mapper, &milestone_address) {
+          match transaction.process(
+            &mut mapper,
+            &counters,
+            &milestone_address,
+          ) {
             Ok(Some(vec)) => {
               tx.send(vec).expect("Thread communication failure");
             }

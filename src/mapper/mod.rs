@@ -3,6 +3,7 @@ mod transaction;
 
 pub use self::error::{Error, Result};
 pub use self::transaction::Transaction;
+use counters::Counters;
 use mysql;
 
 pub struct Mapper<'a> {
@@ -22,7 +23,7 @@ pub struct Mapper<'a> {
 
 impl<'a> Mapper<'a> {
   pub fn new(pool: &mysql::Pool) -> Result<Self> {
-    Ok(Mapper {
+    Ok(Self {
       select_transactions_by_hash: pool.prepare(
         r#"
           SELECT id_tx, id_trunk, id_branch FROM tx WHERE hash = :hash
@@ -49,7 +50,7 @@ impl<'a> Mapper<'a> {
       )?,
       insert_transaction_placeholder: pool.prepare(
         r#"
-          INSERT INTO tx (hash, da) VALUES (:hash, 1)
+          INSERT INTO tx (id_tx, hash, da) VALUES (:id_tx, :hash, 1)
         "#,
       )?,
       update_transaction: pool.prepare(
@@ -86,7 +87,11 @@ impl<'a> Mapper<'a> {
       )?,
       insert_address: pool.prepare(
         r#"
-          INSERT INTO address (address) VALUES (:address)
+          INSERT INTO address (
+            id_address, address
+          ) VALUES (
+            :id_address, :address
+          )
         "#,
       )?,
       select_bundles: pool.prepare(
@@ -97,9 +102,9 @@ impl<'a> Mapper<'a> {
       insert_bundle: pool.prepare(
         r#"
           INSERT INTO bundle (
-           bundle, created, size
+            id_bundle, bundle, created, size
           ) VALUES (
-           :bundle, :created, :size
+            :id_bundle, :bundle, :created, :size
           )
         "#,
       )?,
@@ -151,67 +156,76 @@ impl<'a> Mapper<'a> {
     })?)
   }
 
-  pub fn insert_or_select_and_approve_transaction(
+  pub fn fetch_transaction(
     &mut self,
+    counters: &Counters,
     hash: &str,
   ) -> Result<u64> {
-    let insert_result = self.insert_transaction_placeholder.execute(params!{
+    match self.select_transactions_by_hash.first_exec(params!{
       "hash" => hash,
-    });
-    match insert_result {
-      Ok(result) => Ok(result.last_insert_id()),
-      Err(_) => {
-        let id_tx = self
-          .select_transactions_by_hash
-          .first_exec(params!{"hash" => hash})?
-          .ok_or(Error::RecordNotFound)?
-          .take_opt("id_tx")
-          .ok_or(Error::ColumnNotFound)??;
+    })? {
+      Some(mut result) => {
+        let id_tx = result.take_opt("id_tx").ok_or(Error::ColumnNotFound)??;
         self.direct_approve_transaction.execute(params!{
-          "id_tx" => id_tx
+          "id_tx" => id_tx,
+        })?;
+        Ok(id_tx)
+      }
+      None => {
+        let id_tx = counters.next_transaction();
+        self.insert_transaction_placeholder.execute(params!{
+          "id_tx" => id_tx,
+          "hash" => hash,
         })?;
         Ok(id_tx)
       }
     }
   }
 
-  pub fn insert_or_select_address(&mut self, address: &str) -> Result<u64> {
-    let insert_result = self.insert_address.execute(params!{
+  pub fn fetch_address(
+    &mut self,
+    counters: &Counters,
+    address: &str,
+  ) -> Result<u64> {
+    match self.select_addresses.first_exec(params!{
       "address" => address,
-    });
-    match insert_result {
-      Ok(result) => Ok(result.last_insert_id()),
-      Err(_) => {
-        Ok(self
-          .select_addresses
-          .first_exec(params!{"address" => address})?
-          .ok_or(Error::RecordNotFound)?
-          .take_opt("id_address")
-          .ok_or(Error::ColumnNotFound)??)
+    })? {
+      Some(mut result) => Ok(result.take_opt("id_address").ok_or(
+        Error::ColumnNotFound,
+      )??),
+      None => {
+        let id_address = counters.next_address();
+        self.insert_address.execute(params!{
+          "id_address" => id_address,
+          "address" => address,
+        })?;
+        Ok(id_address)
       }
     }
   }
 
-  pub fn insert_or_select_bundle(
+  pub fn fetch_bundle(
     &mut self,
+    counters: &Counters,
     bundle: &str,
     created: f64,
     size: i32,
   ) -> Result<u64> {
-    let insert_result = self.insert_bundle.execute(params!{
+    match self.select_bundles.first_exec(params!{
       "bundle" => bundle,
-      "created" => created,
-      "size" => size,
-    });
-    match insert_result {
-      Ok(result) => Ok(result.last_insert_id()),
-      Err(_) => {
-        Ok(self
-          .select_bundles
-          .first_exec(params!{"bundle" => bundle})?
-          .ok_or(Error::RecordNotFound)?
-          .take_opt("id_bundle")
-          .ok_or(Error::ColumnNotFound)??)
+    })? {
+      Some(mut result) => Ok(result.take_opt("id_bundle").ok_or(
+        Error::ColumnNotFound,
+      )??),
+      None => {
+        let id_bundle = counters.next_bundle();
+        self.insert_bundle.execute(params!{
+          "id_bundle" => id_bundle,
+          "bundle" => bundle,
+          "created" => created,
+          "size" => size,
+        })?;
+        Ok(id_bundle)
       }
     }
   }
