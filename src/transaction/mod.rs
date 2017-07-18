@@ -1,6 +1,7 @@
 mod error;
 
 pub use self::error::{Error, Result};
+use counters::Counters;
 use mapper::{self, Mapper};
 use utils;
 
@@ -23,7 +24,7 @@ pub struct Transaction<'a> {
 impl<'a> Transaction<'a> {
   pub fn parse(source: &'a str) -> Result<Self> {
     let chunks: Vec<&'a str> = source.split(' ').collect();
-    Ok(Transaction {
+    Ok(Self {
       hash: chunks[1],
       address_hash: chunks[2],
       value: chunks[3].parse()?,
@@ -85,6 +86,7 @@ impl<'a> Transaction<'a> {
   pub fn process(
     &self,
     mapper: &mut Mapper,
+    counters: &Counters,
     milestone_address: &str,
   ) -> Result<Option<Vec<u64>>> {
     let mut result = mapper.select_transaction_by_hash(self.hash)?;
@@ -99,19 +101,16 @@ impl<'a> Transaction<'a> {
         return Ok(None);
       }
     }
-    let id_trunk = mapper.insert_or_select_and_approve_transaction(
-      self.trunk_hash,
-    )?;
-    let id_branch = mapper.insert_or_select_and_approve_transaction(
-      self.branch_hash,
-    )?;
-    let id_address = mapper.insert_or_select_address(self.address_hash)?;
-    let id_bundle = mapper.insert_or_select_bundle(
+    let id_trunk = mapper.fetch_transaction(counters, self.trunk_hash)?;
+    let id_branch = mapper.fetch_transaction(counters, self.branch_hash)?;
+    let id_address = mapper.fetch_address(counters, self.address_hash)?;
+    let id_bundle = mapper.fetch_bundle(
+      counters,
       self.bundle_hash,
       utils::milliseconds_since_epoch()?,
       self.last_index,
     )?;
-    let is_milestone = self.is_milestone(milestone_address);
+    let is_milestone = self.address_hash == milestone_address;
     let transaction = mapper::Transaction {
       hash: self.hash,
       id_trunk: id_trunk,
@@ -127,7 +126,7 @@ impl<'a> Transaction<'a> {
       mst_a: is_milestone,
     };
     if result.is_none() {
-      mapper.insert_transaction(transaction)?;
+      mapper.insert_transaction(counters, transaction)?;
     } else {
       mapper.update_transaction(transaction)?;
     }
@@ -136,9 +135,5 @@ impl<'a> Transaction<'a> {
     } else {
       Ok(None)
     }
-  }
-
-  fn is_milestone(&self, milestone_address: &str) -> bool {
-    self.address_hash == milestone_address
   }
 }
