@@ -1,8 +1,8 @@
 mod error;
-mod transaction;
+mod transaction_record;
 
 pub use self::error::{Error, Result};
-pub use self::transaction::Transaction;
+pub use self::transaction_record::TransactionRecord;
 use counters::Counters;
 use mysql;
 
@@ -19,6 +19,7 @@ pub struct Mapper<'a> {
   select_bundles: mysql::Stmt<'a>,
   insert_bundle: mysql::Stmt<'a>,
   update_bundle: mysql::Stmt<'a>,
+  insert_event: mysql::Stmt<'a>,
 }
 
 impl<'a> Mapper<'a> {
@@ -115,6 +116,15 @@ impl<'a> Mapper<'a> {
           WHERE id_bundle = :id_bundle
         "#,
       )?,
+      insert_event: pool.prepare(
+        r#"
+          INSERT INTO txload (
+            event, count, timestamp
+          ) VALUES (
+            :event, :count, :timestamp
+          )
+        "#,
+      )?,
     })
   }
 
@@ -123,8 +133,20 @@ impl<'a> Mapper<'a> {
     hash: &str,
   ) -> Result<Option<mysql::Row>> {
     Ok(self.select_transactions_by_hash.first_exec(params!{
-      "hash" => hash
+      "hash" => hash,
     })?)
+  }
+
+  pub fn select_transaction_id_by_hash(
+    &mut self,
+    hash: &str,
+  ) -> Result<Option<u64>> {
+    match self.select_transaction_by_hash(hash)? {
+      Some(mut result) => Ok(Some(
+        result.take_opt("id_tx").ok_or(Error::ColumnNotFound)??,
+      )),
+      None => Ok(None),
+    }
   }
 
   pub fn select_transaction_by_id(
@@ -132,14 +154,14 @@ impl<'a> Mapper<'a> {
     id_tx: u64,
   ) -> Result<Option<mysql::Row>> {
     Ok(self.select_transactions_by_id.first_exec(params!{
-      "id_tx" => id_tx
+      "id_tx" => id_tx,
     })?)
   }
 
   pub fn insert_transaction(
     &mut self,
     counters: &Counters,
-    transaction: Transaction,
+    transaction: TransactionRecord,
   ) -> Result<mysql::QueryResult> {
     let id_tx = counters.next_transaction();
     let mut params = transaction.to_params();
@@ -149,41 +171,38 @@ impl<'a> Mapper<'a> {
 
   pub fn update_transaction(
     &mut self,
-    transaction: Transaction,
+    transaction: TransactionRecord,
   ) -> Result<mysql::QueryResult> {
     Ok(self.update_transaction.execute(transaction.to_params())?)
   }
 
   pub fn approve_transaction(&mut self, id: u64) -> Result<mysql::QueryResult> {
     Ok(self.approve_transaction.execute(params!{
-      "id_tx" => id, "mst_a" => true
+      "id_tx" => id,
+      "mst_a" => true,
     })?)
   }
 
-  pub fn fetch_transaction(
+  pub fn direct_approve_transaction(
+    &mut self,
+    id: u64,
+  ) -> Result<mysql::QueryResult> {
+    Ok(self.direct_approve_transaction.execute(params!{
+      "id_tx" => id,
+    })?)
+  }
+
+  pub fn insert_transaction_placeholder(
     &mut self,
     counters: &Counters,
     hash: &str,
   ) -> Result<u64> {
-    match self.select_transactions_by_hash.first_exec(params!{
+    let id_tx = counters.next_transaction();
+    self.insert_transaction_placeholder.execute(params!{
+      "id_tx" => id_tx,
       "hash" => hash,
-    })? {
-      Some(mut result) => {
-        let id_tx = result.take_opt("id_tx").ok_or(Error::ColumnNotFound)??;
-        self.direct_approve_transaction.execute(params!{
-          "id_tx" => id_tx,
-        })?;
-        Ok(id_tx)
-      }
-      None => {
-        let id_tx = counters.next_transaction();
-        self.insert_transaction_placeholder.execute(params!{
-          "id_tx" => id_tx,
-          "hash" => hash,
-        })?;
-        Ok(id_tx)
-      }
-    }
+    })?;
+    Ok(id_tx)
   }
 
   pub fn fetch_address(
@@ -211,8 +230,8 @@ impl<'a> Mapper<'a> {
   pub fn fetch_bundle(
     &mut self,
     counters: &Counters,
-    bundle: &str,
     created: f64,
+    bundle: &str,
     size: i32,
   ) -> Result<u64> {
     match self.select_bundles.first_exec(params!{
@@ -243,5 +262,48 @@ impl<'a> Mapper<'a> {
       "id_bundle" => id,
       "confirmed" => confirmed,
     })?)
+  }
+
+  pub fn new_transaction_received_event(
+    &mut self,
+    timestamp: f64,
+  ) -> Result<()> {
+    self.insert_event.execute(params!{
+      "event" => "NTX",
+      "count" => 1,
+      "timestamp" => timestamp,
+    })?;
+    Ok(())
+  }
+
+  pub fn milestone_received_event(&mut self, timestamp: f64) -> Result<()> {
+    self.insert_event.execute(params!{
+      "event" => "MST",
+      "count" => 1,
+      "timestamp" => timestamp,
+    })?;
+    Ok(())
+  }
+
+  pub fn subtanble_confirmation_event(
+    &mut self,
+    timestamp: f64,
+    count: u32,
+  ) -> Result<()> {
+    self.insert_event.execute(params!{
+      "event" => "CNF",
+      "count" => count,
+      "timestamp" => timestamp,
+    })?;
+    Ok(())
+  }
+
+  pub fn unsolid_transaction_event(&mut self, timestamp: f64) -> Result<()> {
+    self.insert_event.execute(params!{
+      "event" => "UNS",
+      "count" => 1,
+      "timestamp" => timestamp,
+    })?;
+    Ok(())
   }
 }

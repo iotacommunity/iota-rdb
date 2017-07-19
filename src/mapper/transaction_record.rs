@@ -1,6 +1,6 @@
 use mysql;
 
-pub struct Transaction<'a> {
+pub struct TransactionRecord<'a> {
   pub hash: &'a str,
   pub id_trunk: u64,
   pub id_branch: u64,
@@ -15,7 +15,7 @@ pub struct Transaction<'a> {
   pub mst_a: bool,
 }
 
-impl<'a> Transaction<'a> {
+impl<'a> TransactionRecord<'a> {
   pub fn to_params(&self) -> Vec<(String, mysql::Value)> {
     params!{
       "hash" => self.hash,
