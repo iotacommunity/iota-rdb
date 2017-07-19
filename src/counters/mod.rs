@@ -1,7 +1,6 @@
 mod error;
 
 pub use self::error::{Error, Result};
-use mapper;
 use mysql;
 use std::sync::Mutex;
 
@@ -61,9 +60,7 @@ impl Counters {
   ) -> Result<u64> {
     match pool.get_conn()?.first(query)? {
       Some(mut result) => {
-        Ok(
-          result.take_opt(column).ok_or(mapper::Error::ColumnNotFound)??,
-        )
+        Ok(result.take_opt(column).ok_or(Error::IdColumnNotFound)??)
       }
       None => Ok(0),
     }
