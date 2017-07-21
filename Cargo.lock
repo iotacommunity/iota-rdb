@@ -4,6 +4,7 @@ version = "0.1.0"
 dependencies = [
  "clap 2.25.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "clippy 0.0.143 (registry+https://github.com/rust-lang/crates.io-index)",
+ "iota-trytes 0.1.0",
  "mysql 11.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "zmq 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -151,6 +152,10 @@ dependencies = [
  "unicode-bidi 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "unicode-normalization 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "iota-trytes"
+version = "0.1.0"
 
 [[package]]
 name = "itertools"

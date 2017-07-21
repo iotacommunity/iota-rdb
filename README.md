@@ -6,7 +6,8 @@
 
 ## Building
 
-We use stable channel of [Rust][rust]. To install it, run the following command:
+We are using the nightly channel of [Rust][rust]. To install it, run the
+following command:
 
 ```sh
 $ curl https://sh.rustup.rs -sSf | sh

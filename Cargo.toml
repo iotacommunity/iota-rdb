@@ -10,5 +10,8 @@ zmq = "0.8"
 mysql = "11"
 clippy = {version = "*", optional = true}
 
+[dependencies.iota-trytes]
+path = "iota.rs/trytes"
+
 [features]
 default = []

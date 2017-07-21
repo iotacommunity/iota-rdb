@@ -7,6 +7,7 @@ pub enum Error {
   ApproveThreadsParseInt(num::ParseIntError),
   SolidateThreadsParseInt(num::ParseIntError),
   MilestoneStartIndexParseInt(num::ParseIntError),
+  MilestoneStartIndexToTrits,
 }
 
 pub type Result<T> = result::Result<T, Error>;
@@ -27,6 +28,9 @@ impl fmt::Display for Error {
       Error::MilestoneStartIndexParseInt(ref err) => {
         write!(f, "{} (milestone-start-index)", err)
       }
+      Error::MilestoneStartIndexToTrits => {
+        write!(f, "can't convert to trits (milestone-start-index)")
+      }
     }
   }
 }
@@ -39,12 +43,14 @@ impl error::Error for Error {
       Error::ApproveThreadsParseInt(ref err) |
       Error::SolidateThreadsParseInt(ref err) |
       Error::MilestoneStartIndexParseInt(ref err) => err.description(),
+      Error::MilestoneStartIndexToTrits => "Can't convert to trits",
     }
   }
 
   fn cause(&self) -> Option<&error::Error> {
     match *self {
-      Error::ArgNotFound => None,
+      Error::ArgNotFound |
+      Error::MilestoneStartIndexToTrits => None,
       Error::WriteThreadsParseInt(ref err) |
       Error::ApproveThreadsParseInt(ref err) |
       Error::SolidateThreadsParseInt(ref err) |

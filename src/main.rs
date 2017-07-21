@@ -6,6 +6,7 @@ extern crate clap;
 extern crate zmq;
 #[macro_use]
 extern crate mysql;
+extern crate iota_trytes;
 
 #[macro_use]
 mod macros;

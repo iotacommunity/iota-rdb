@@ -6,7 +6,7 @@ use mapper::{self, Mapper};
 use mysql;
 use utils;
 
-const MAX_TAG_LENGTH: usize = 27;
+pub const TAG_LENGTH: usize = 27;
 
 #[derive(Debug)]
 pub struct Transaction<'a> {
@@ -37,7 +37,7 @@ impl<'a> Transaction<'a> {
     let hash = chunks[1];
     let address_hash = chunks[2];
     let value = chunks[3].parse()?;
-    let tag = &chunks[4][..MAX_TAG_LENGTH];
+    let tag = &chunks[4][..TAG_LENGTH];
     let timestamp = chunks[5].parse()?;
     let current_index = chunks[6].parse()?;
     let last_index = chunks[7].parse()?;
