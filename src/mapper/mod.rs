@@ -44,7 +44,7 @@ impl<'a> Mapper<'a> {
       select_child_transactions: pool.prepare(
         r#"
           SELECT
-            id_tx, id_trunk, id_branch, solid
+            id_tx, id_trunk, id_branch, height, solid
           FROM tx
           WHERE id_trunk = :id_tx OR id_branch = :id_tx
         "#,
@@ -214,10 +214,11 @@ impl<'a> Mapper<'a> {
   pub fn solidate_branch_transaction(
     &mut self,
     id: u64,
+    solid: u8,
   ) -> Result<mysql::QueryResult> {
     Ok(self.solidate_branch_transaction.execute(params!{
       "id_tx" => id,
-      "solid" => true,
+      "solid" => solid,
     })?)
   }
 
@@ -225,11 +226,12 @@ impl<'a> Mapper<'a> {
     &mut self,
     id: u64,
     height: i32,
+    solid: u8,
   ) -> Result<mysql::QueryResult> {
     Ok(self.solidate_trunk_transaction.execute(params!{
       "id_tx" => id,
       "height" => height,
-      "solid" => true,
+      "solid" => solid,
     })?)
   }
 

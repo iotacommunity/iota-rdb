@@ -13,7 +13,7 @@ pub struct TransactionRecord<'a> {
   pub last_idx: i32,
   pub is_mst: bool,
   pub mst_a: bool,
-  pub solid: bool,
+  pub solid: u8,
 }
 
 impl<'a> TransactionRecord<'a> {
