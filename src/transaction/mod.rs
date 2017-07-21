@@ -20,22 +20,42 @@ pub struct Transaction<'a> {
   bundle_hash: &'a str,
   trunk_hash: &'a str,
   branch_hash: &'a str,
+  is_milestone: bool,
+  is_solid: bool,
 }
 
 impl<'a> Transaction<'a> {
-  pub fn parse(source: &'a str) -> Result<Self> {
+  pub fn parse(
+    source: &'a str,
+    milestone_address: &str,
+    milestone_start_index: &str,
+  ) -> Result<Self> {
     let chunks: Vec<&'a str> = source.split(' ').collect();
+    let hash = chunks[1];
+    let address_hash = chunks[2];
+    let value = chunks[3].parse()?;
+    let tag = &chunks[4][..MAX_TAG_LENGTH];
+    let timestamp = chunks[5].parse()?;
+    let current_index = chunks[6].parse()?;
+    let last_index = chunks[7].parse()?;
+    let bundle_hash = chunks[8];
+    let trunk_hash = chunks[9];
+    let branch_hash = chunks[10];
+    let is_milestone = address_hash == milestone_address;
+    let is_solid = is_milestone && tag == milestone_start_index;
     Ok(Self {
-      hash: chunks[1],
-      address_hash: chunks[2],
-      value: chunks[3].parse()?,
-      tag: chunks[4],
-      timestamp: chunks[5].parse()?,
-      current_index: chunks[6].parse()?,
-      last_index: chunks[7].parse()?,
-      bundle_hash: chunks[8],
-      trunk_hash: chunks[9],
-      branch_hash: chunks[10],
+      hash,
+      address_hash,
+      value,
+      tag,
+      timestamp,
+      current_index,
+      last_index,
+      bundle_hash,
+      trunk_hash,
+      branch_hash,
+      is_milestone,
+      is_solid,
     })
   }
 
@@ -88,8 +108,6 @@ impl<'a> Transaction<'a> {
     &self,
     mapper: &mut Mapper,
     counters: &Counters,
-    milestone_address: &str,
-    milestone_start_index: &str,
   ) -> Result<Option<Vec<u64>>> {
     let mut result = mapper.select_transaction_by_hash(self.hash)?;
     if Self::is_duplicate(&mut result)? {
@@ -120,20 +138,20 @@ impl<'a> Transaction<'a> {
       self.bundle_hash,
       self.last_index,
     )?;
-    let is_milestone = self.address_hash == milestone_address;
     let record = mapper::TransactionRecord {
       hash: self.hash,
       id_trunk: id_trunk,
       id_branch: id_branch,
       id_address: id_address,
       id_bundle: id_bundle,
-      tag: &self.tag[..MAX_TAG_LENGTH],
+      tag: self.tag,
       value: self.value,
       timestamp: self.timestamp,
       current_idx: self.current_index,
       last_idx: self.last_index,
-      is_mst: is_milestone,
-      mst_a: is_milestone,
+      is_mst: self.is_milestone,
+      mst_a: self.is_milestone,
+      solid: self.is_solid,
     };
     if result.is_none() {
       mapper.insert_transaction(counters, record)?;
@@ -141,7 +159,7 @@ impl<'a> Transaction<'a> {
       mapper.update_transaction(record)?;
     }
     mapper.new_transaction_received_event(timestamp)?;
-    if is_milestone {
+    if self.is_milestone {
       mapper.milestone_received_event(timestamp)?;
       Ok(Some(vec![id_trunk, id_branch]))
     } else {

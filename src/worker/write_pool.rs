@@ -25,15 +25,13 @@ impl<'a> WritePool<'a> {
       let milestone_start_index = self.milestone_start_index.to_owned();
       thread::spawn(move || loop {
         let rx = rx.lock().expect("Mutex is poisoned");
-        let string = rx.recv().expect("Thread communication failure");
-        match Transaction::parse(&string) {
+        match Transaction::parse(
+          &rx.recv().expect("Thread communication failure"),
+          &milestone_address,
+          &milestone_start_index,
+        ) {
           Ok(transaction) => {
-            match transaction.process(
-              &mut mapper,
-              &counters,
-              &milestone_address,
-              &milestone_start_index,
-            ) {
+            match transaction.process(&mut mapper, &counters) {
               Ok(Some(vec)) => {
                 approve_tx.send(vec).expect("Thread communication failure");
               }

@@ -38,20 +38,20 @@ impl<'a> Mapper<'a> {
           WHERE id_tx = :id_tx
         "#,
       )?,
+      insert_transaction_placeholder: pool.prepare(
+        r#"
+          INSERT INTO tx (id_tx, hash, da) VALUES (:id_tx, :hash, 1)
+        "#,
+      )?,
       insert_transaction: pool.prepare(
         r#"
           INSERT INTO tx (
             id_tx, hash, id_trunk, id_branch, id_address, id_bundle, tag, value,
-            timestamp, current_idx, last_idx, is_mst, mst_a
+            timestamp, current_idx, last_idx, is_mst, mst_a, solid
           ) VALUES (
             :id_tx, :hash, :id_trunk, :id_branch, :id_address, :id_bundle, :tag,
-            :value, :timestamp, :current_idx, :last_idx, :is_mst, :mst_a
+            :value, :timestamp, :current_idx, :last_idx, :is_mst, :mst_a, :solid
           )
-        "#,
-      )?,
-      insert_transaction_placeholder: pool.prepare(
-        r#"
-          INSERT INTO tx (id_tx, hash, da) VALUES (:id_tx, :hash, 1)
         "#,
       )?,
       update_transaction: pool.prepare(
@@ -67,7 +67,8 @@ impl<'a> Mapper<'a> {
             current_idx = :current_idx,
             last_idx = :last_idx,
             is_mst = :is_mst,
-            mst_a = :mst_a
+            mst_a = :mst_a,
+            solid = solid
           WHERE hash = :hash
         "#,
       )?,
