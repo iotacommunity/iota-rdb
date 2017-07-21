@@ -41,47 +41,42 @@ impl<'a> Transaction<'a> {
 
   pub fn approve(mapper: &mut Mapper, mut ids: Vec<u64>) -> Result<()> {
     let (timestamp, mut counter) = (utils::milliseconds_since_epoch()?, 0);
-    loop {
-      match ids.pop() {
-        None => break,
-        Some(id) => {
-          let mut row = mapper.select_transaction_by_id(id)?.ok_or(
-            mapper::Error::RecordNotFound,
-          )?;
-          let milestone_approved =
-            row.take_opt("mst_a").ok_or(mapper::Error::ColumnNotFound)?;
-          if milestone_approved.unwrap_or(false) {
-            continue;
-          }
-          let id_trunk = row
-            .take_opt("id_trunk")
-            .ok_or(mapper::Error::ColumnNotFound)?
-            .unwrap_or(0);
-          let id_branch = row
-            .take_opt("id_branch")
-            .ok_or(mapper::Error::ColumnNotFound)?
-            .unwrap_or(0);
-          let current_index = row.take_opt("current_idx").ok_or(
-            mapper::Error::ColumnNotFound,
-          )?;
-          if id_trunk != 0 {
-            ids.push(id_trunk);
-          }
-          if id_branch != 0 {
-            ids.push(id_branch);
-          }
-          if let Ok(0) = current_index {
-            let id_bundle = row.take_opt("id_bundle").ok_or(
-              mapper::Error::ColumnNotFound,
-            )?;
-            if let Ok(id_bundle) = id_bundle {
-              mapper.update_bundle(id_bundle, timestamp)?;
-            }
-          }
-          mapper.approve_transaction(id)?;
-          counter += 1;
+    while let Some(id) = ids.pop() {
+      let mut row = mapper.select_transaction_by_id(id)?.ok_or(
+        mapper::Error::RecordNotFound,
+      )?;
+      let milestone_approved =
+        row.take_opt("mst_a").ok_or(mapper::Error::ColumnNotFound)?;
+      if milestone_approved.unwrap_or(false) {
+        continue;
+      }
+      let id_trunk = row
+        .take_opt("id_trunk")
+        .ok_or(mapper::Error::ColumnNotFound)?
+        .unwrap_or(0);
+      let id_branch = row
+        .take_opt("id_branch")
+        .ok_or(mapper::Error::ColumnNotFound)?
+        .unwrap_or(0);
+      let current_index = row.take_opt("current_idx").ok_or(
+        mapper::Error::ColumnNotFound,
+      )?;
+      if id_trunk != 0 {
+        ids.push(id_trunk);
+      }
+      if id_branch != 0 {
+        ids.push(id_branch);
+      }
+      if let Ok(0) = current_index {
+        let id_bundle = row.take_opt("id_bundle").ok_or(
+          mapper::Error::ColumnNotFound,
+        )?;
+        if let Ok(id_bundle) = id_bundle {
+          mapper.update_bundle(id_bundle, timestamp)?;
         }
       }
+      mapper.approve_transaction(id)?;
+      counter += 1;
     }
     if counter > 0 {
       mapper.subtanble_confirmation_event(timestamp, counter)?;
@@ -94,6 +89,7 @@ impl<'a> Transaction<'a> {
     mapper: &mut Mapper,
     counters: &Counters,
     milestone_address: &str,
+    milestone_start_index: &str,
   ) -> Result<Option<Vec<u64>>> {
     let mut result = mapper.select_transaction_by_hash(self.hash)?;
     if Self::is_duplicate(&mut result)? {
