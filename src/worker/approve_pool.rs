@@ -20,10 +20,10 @@ impl<'a> ApprovePool<'a> {
         let vec = rx.recv().expect("Thread communication failure");
         match Transaction::approve(&mut mapper, vec.clone()) {
           Ok(()) => {
-          if verbose {
-            println!("approve_thread#{} {:?}", i, vec);
+            if verbose {
+              println!("approve_thread#{} {:?}", i, vec);
+            }
           }
-        }
           Err(err) => {
             eprintln!("Transaction approve error: {}", err);
           }

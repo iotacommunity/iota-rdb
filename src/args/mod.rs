@@ -1,3 +1,6 @@
+mod error;
+
+pub use self::error::{Error, Result};
 use clap::ArgMatches;
 
 pub struct Args<'a> {
@@ -11,32 +14,28 @@ pub struct Args<'a> {
 }
 
 impl<'a> Args<'a> {
-  pub fn parse(matches: &'a ArgMatches<'a>) -> Self {
-    Self {
-      zmq_uri: matches.value_of("zmq_uri").expect(
-        "ZMQ URI were not provided",
-      ),
-      mysql_uri: matches.value_of("mysql_uri").expect(
-        "MYSQL URI were not provided",
-      ),
+  pub fn parse(matches: &'a ArgMatches<'a>) -> Result<Self> {
+    Ok(Self {
+      zmq_uri: matches.value_of("zmq_uri").ok_or(Error::ArgNotFound)?,
+      mysql_uri: matches.value_of("mysql_uri").ok_or(Error::ArgNotFound)?,
       write_threads_count: matches
         .value_of("write_threads_count")
-        .expect("write-threads were not provided")
+        .ok_or(Error::ArgNotFound)?
         .parse()
-        .expect("write-threads not a number"),
+        .map_err(Error::WriteThreadsParseInt)?,
       approve_threads_count: matches
         .value_of("approve_threads_count")
-        .expect("approve-threads were not provided")
+        .ok_or(Error::ArgNotFound)?
         .parse()
-        .expect("approve-threads not a number"),
-      milestone_address: matches.value_of("milestone_address").expect(
-        "milestone-address were not provided",
-      ),
-      milestone_start_index: matches.value_of("milestone_start_index").expect(
-        "milestone-start-index were not provided",
-      ),
+        .map_err(Error::ApproveThreadsParseInt)?,
+      milestone_address: matches.value_of("milestone_address").ok_or(
+        Error::ArgNotFound,
+      )?,
+      milestone_start_index: matches.value_of("milestone_start_index").ok_or(
+        Error::ArgNotFound,
+      )?,
       verbose: matches.is_present("VERBOSE"),
-    }
+    })
   }
 
   pub fn zmq_uri(&self) -> &str {

@@ -19,12 +19,16 @@ mod utils;
 
 use args::Args;
 use counters::Counters;
+use std::process::exit;
 use std::sync::{Arc, mpsc};
 use worker::{ApprovePool, WritePool, ZmqReader};
 
 fn main() {
   let matches = app::build().get_matches();
-  let args = Args::parse(&matches);
+  let args = Args::parse(&matches).unwrap_or_else(|err| {
+    eprintln!("Invalid arguments: {}", err);
+    exit(1);
+  });
 
   let pool = mysql::Pool::new(args.mysql_uri()).expect("MySQL connect failure");
   let counters =
