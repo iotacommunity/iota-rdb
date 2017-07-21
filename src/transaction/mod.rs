@@ -108,6 +108,7 @@ impl<'a> Transaction<'a> {
   }
 
   pub fn solidate(mapper: &mut Mapper, hash: &str) -> Result<()> {
+    let (timestamp, mut counter) = (utils::milliseconds_since_epoch()?, 0);
     let mut ids = Vec::new();
     ids.push(mapper
       .select_transaction_by_hash(hash)?
@@ -122,8 +123,12 @@ impl<'a> Transaction<'a> {
       }
       for id in child_ids {
         mapper.solidate_transaction(id)?;
+        counter += 1;
         ids.push(id);
       }
+    }
+    if counter > 0 {
+      mapper.subtangle_solidation_event(timestamp, counter)?;
     }
     Ok(())
   }

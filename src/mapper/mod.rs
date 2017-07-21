@@ -329,4 +329,17 @@ impl<'a> Mapper<'a> {
     })?;
     Ok(())
   }
+
+  pub fn subtangle_solidation_event(
+    &mut self,
+    timestamp: f64,
+    count: u32,
+  ) -> Result<()> {
+    self.insert_event.execute(params!{
+      "event" => "SOL",
+      "count" => count,
+      "timestamp" => timestamp,
+    })?;
+    Ok(())
+  }
 }
