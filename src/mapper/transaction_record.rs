@@ -13,6 +13,7 @@ pub struct TransactionRecord<'a> {
   pub last_idx: i32,
   pub is_mst: bool,
   pub mst_a: bool,
+  pub solid: bool,
 }
 
 impl<'a> TransactionRecord<'a> {
@@ -30,6 +31,7 @@ impl<'a> TransactionRecord<'a> {
       "last_idx" => self.last_idx,
       "is_mst" => self.is_mst,
       "mst_a" => self.mst_a,
+      "solid" => self.solid,
     }
   }
 }

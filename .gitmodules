@@ -1,0 +1,3 @@
+[submodule "iota.rs"]
+	path = iota.rs
+	url = git@github.com:iotaledger/iota.rs

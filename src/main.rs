@@ -6,208 +6,78 @@ extern crate clap;
 extern crate zmq;
 #[macro_use]
 extern crate mysql;
+extern crate iota_trytes;
 
+#[macro_use]
+mod macros;
+mod app;
+mod args;
+mod worker;
 mod transaction;
 mod counters;
 mod mapper;
-#[macro_use]
-mod macros;
 mod utils;
 
-use clap::Arg;
+use args::Args;
 use counters::Counters;
-use mapper::Mapper;
-use std::sync::{Arc, Mutex, mpsc};
-use std::thread;
-use transaction::Transaction;
-
-const DEFAULT_MILESTONE_ADDRESS: &str = "KPWCHICGJZXKE9GSUDXZYUAPLHAKAHYHDXNPHENTERYMMBQOPSQIDENXKLKCEYCPVTZQLEEJVYJZV9BWU";
+use std::process::exit;
+use std::sync::{Arc, mpsc};
+use worker::{ApprovePool, SolidatePool, WritePool, ZmqReader};
 
 fn main() {
-  let matches = app_from_crate!()
-    .arg(
-      Arg::with_name("ZMQ_URI")
-        .short("z")
-        .long("zmq")
-        .takes_value(true)
-        .value_name("URI")
-        .required(true)
-        .help("ZMQ source server URI"),
-    )
-    .arg(
-      Arg::with_name("MYSQL_URI")
-        .short("m")
-        .long("mysql")
-        .takes_value(true)
-        .value_name("URI")
-        .required(true)
-        .help("MySQL destination server URI"),
-    )
-    .arg(
-      Arg::with_name("WRITE_THREADS_COUNT")
-        .short("w")
-        .long("write-threads")
-        .takes_value(true)
-        .value_name("COUNT")
-        .default_value("1")
-        .help("Count of regular write worker threads"),
-    )
-    .arg(
-      Arg::with_name("APPROVE_THREADS_COUNT")
-        .short("a")
-        .long("approve-threads")
-        .takes_value(true)
-        .value_name("COUNT")
-        .default_value("1")
-        .help("Count of milestone approval worker threads"),
-    )
-    .arg(
-      Arg::with_name("MILESTONE_ADDRESS")
-        .short("s")
-        .long("milestone-address")
-        .takes_value(true)
-        .value_name("ADDRESS")
-        .default_value(DEFAULT_MILESTONE_ADDRESS)
-        .help("Count of milestone approval worker threads"),
-    )
-    .arg(Arg::with_name("VERBOSE").short("v").long("verbose").help(
-      "Prints flowing messages",
-    ))
-    .get_matches();
-  let zmq_uri = matches.value_of("ZMQ_URI").expect(
-    "ZMQ_URI were not provided",
-  );
-  let mysql_uri = matches.value_of("MYSQL_URI").expect(
-    "MYSQL_URI were not provided",
-  );
-  let write_threads_count: usize =
-    matches
-      .value_of("WRITE_THREADS_COUNT")
-      .expect("WRITE_THREADS_COUNT were not provided")
-      .parse()
-      .expect("WRITE_THREADS_COUNT not a number");
-  let approve_threads_count: usize =
-    matches
-      .value_of("APPROVE_THREADS_COUNT")
-      .expect("APPROVE_THREADS_COUNT were not provided")
-      .parse()
-      .expect("APPROVE_THREADS_COUNT not a number");
-  let milestone_address = matches.value_of("MILESTONE_ADDRESS").expect(
-    "MILESTONE_ADDRESS were not provided",
-  );
-  let verbose = matches.is_present("VERBOSE");
+  let matches = app::build().get_matches();
+  let args = Args::parse(&matches).unwrap_or_else(|err| {
+    eprintln!("Invalid arguments: {}", err);
+    exit(1);
+  });
 
-  let pool = mysql::Pool::new(mysql_uri).expect("MySQL connect failure");
+  if args.verbose() {
+    println!("Milestone address: {}", args.milestone_address());
+    println!(
+      "Milestone start index string: {}",
+      args.milestone_start_index()
+    );
+  }
+
+  let pool = mysql::Pool::new(args.mysql_uri()).expect("MySQL connect failure");
   let counters =
     Arc::new(Counters::new(&pool).expect("MySQL counters failure"));
   let ctx = zmq::Context::new();
   let socket = ctx.socket(zmq::SUB).expect("ZMQ socket create failure");
-  let (write_tx, write_rx) = mpsc::channel::<String>();
-  let (approve_tx, approve_rx) = mpsc::channel::<Vec<u64>>();
+  let (write_tx, write_rx) = mpsc::channel();
+  let (approve_tx, approve_rx) = mpsc::channel();
+  let (solidate_tx, solidate_rx) = mpsc::channel();
 
-  if verbose {
-    println!("{:?}", counters);
+  if args.verbose() {
+    println!("Highest ids: {}", counters);
   }
 
-  socket.connect(zmq_uri).expect("ZMQ socket connect failure");
-  socket.set_subscribe(b"tx ").expect("ZMQ subscribe failure");
-  spawn_write_workers(
-    &pool,
-    counters,
-    write_rx,
-    &approve_tx,
-    milestone_address,
-    write_threads_count,
-    verbose,
+  socket.connect(args.zmq_uri()).expect(
+    "ZMQ socket connect failure",
   );
-  spawn_approve_workers(&pool, approve_rx, approve_threads_count, verbose);
-  zmq_listen(&socket, &write_tx);
-}
-
-fn zmq_listen(socket: &zmq::Socket, tx: &mpsc::Sender<String>) {
-  loop {
-    match socket.recv_string(0) {
-      Ok(Ok(string)) => {
-        tx.send(string).expect("Thread communication failure");
-      }
-      Ok(Err(err)) => {
-        eprintln!("Unexpected byte sequence: {:?}", err);
-      }
-      Err(err) => {
-        eprintln!("{}", err);
-      }
-    }
-  }
-}
-
-fn spawn_write_workers(
-  pool: &mysql::Pool,
-  counters: Arc<Counters>,
-  rx: mpsc::Receiver<String>,
-  tx: &mpsc::Sender<Vec<u64>>,
-  milestone_address: &str,
-  threads_count: usize,
-  verbose: bool,
-) {
-  let rx = Arc::new(Mutex::new(rx));
-  for i in 0..threads_count {
-    let (tx, rx, counters) = (tx.clone(), rx.clone(), counters.clone());
-    let mut mapper = Mapper::new(pool).expect("MySQL mapper failure");
-    let milestone_address = milestone_address.to_owned();
-    thread::spawn(move || loop {
-      let rx = rx.lock().expect("Mutex is poisoned");
-      let string = rx.recv().expect("Thread communication failure");
-      match Transaction::parse(&string) {
-        Ok(transaction) => {
-          match transaction.process(
-            &mut mapper,
-            &counters,
-            &milestone_address,
-          ) {
-            Ok(Some(vec)) => {
-              tx.send(vec).expect("Thread communication failure");
-            }
-            Ok(None) => {
-              if verbose {
-                println!("write_thread#{} {:?}", i, transaction);
-              }
-            }
-            Err(err) => {
-              eprintln!("Transaction processing error: {}", err);
-            }
-          }
-        }
-        Err(err) => {
-          eprintln!("Transaction parsing error: {}", err);
-        }
-      }
-    });
-  }
-}
-
-fn spawn_approve_workers(
-  pool: &mysql::Pool,
-  rx: mpsc::Receiver<Vec<u64>>,
-  threads_count: usize,
-  verbose: bool,
-) {
-  let rx = Arc::new(Mutex::new(rx));
-  for i in 0..threads_count {
-    let rx = rx.clone();
-    let mut mapper = Mapper::new(pool).expect("MySQL mapper failure");
-    thread::spawn(move || loop {
-      let rx = rx.lock().expect("Mutex is poisoned");
-      let vec = rx.recv().expect("Thread communication failure");
-      match Transaction::approve(&mut mapper, vec.clone()) {
-        Ok(()) => {
-          if verbose {
-            println!("approve_thread#{} {:?}", i, vec);
-          }
-        }
-        Err(err) => {
-          eprintln!("Transaction approve error: {}", err);
-        }
-      }
-    });
-  }
+  socket.set_subscribe(b"tx ").expect("ZMQ subscribe failure");
+  WritePool {
+    rx: write_rx,
+    approve_tx: &approve_tx,
+    solidate_tx: &solidate_tx,
+    pool: &pool,
+    counters: counters,
+    milestone_address: args.milestone_address(),
+    milestone_start_index: args.milestone_start_index(),
+  }.run(args.write_threads_count(), args.verbose());
+  ApprovePool {
+    rx: approve_rx,
+    pool: &pool,
+  }.run(
+    args.approve_threads_count(),
+    args.verbose(),
+  );
+  SolidatePool {
+    rx: solidate_rx,
+    pool: &pool,
+  }.run(args.solidate_threads_count(), args.verbose());
+  ZmqReader {
+    socket: &socket,
+    tx: &write_tx,
+  }.run();
 }

@@ -9,11 +9,13 @@ use mysql;
 pub struct Mapper<'a> {
   select_transactions_by_hash: mysql::Stmt<'a>,
   select_transactions_by_id: mysql::Stmt<'a>,
+  select_child_transactions: mysql::Stmt<'a>,
   insert_transaction: mysql::Stmt<'a>,
   insert_transaction_placeholder: mysql::Stmt<'a>,
   update_transaction: mysql::Stmt<'a>,
   approve_transaction: mysql::Stmt<'a>,
   direct_approve_transaction: mysql::Stmt<'a>,
+  solidate_transaction: mysql::Stmt<'a>,
   select_addresses: mysql::Stmt<'a>,
   insert_address: mysql::Stmt<'a>,
   select_bundles: mysql::Stmt<'a>,
@@ -27,7 +29,7 @@ impl<'a> Mapper<'a> {
     Ok(Self {
       select_transactions_by_hash: pool.prepare(
         r#"
-          SELECT id_tx, id_trunk, id_branch FROM tx WHERE hash = :hash
+          SELECT id_tx, id_trunk, id_branch, solid FROM tx WHERE hash = :hash
         "#,
       )?,
       select_transactions_by_id: pool.prepare(
@@ -38,20 +40,28 @@ impl<'a> Mapper<'a> {
           WHERE id_tx = :id_tx
         "#,
       )?,
-      insert_transaction: pool.prepare(
+      select_child_transactions: pool.prepare(
         r#"
-          INSERT INTO tx (
-            id_tx, hash, id_trunk, id_branch, id_address, id_bundle, tag, value,
-            timestamp, current_idx, last_idx, is_mst, mst_a
-          ) VALUES (
-            :id_tx, :hash, :id_trunk, :id_branch, :id_address, :id_bundle, :tag,
-            :value, :timestamp, :current_idx, :last_idx, :is_mst, :mst_a
-          )
+          SELECT
+            id_tx
+          FROM tx
+          WHERE id_trunk = :id_tx OR id_branch = :id_tx
         "#,
       )?,
       insert_transaction_placeholder: pool.prepare(
         r#"
           INSERT INTO tx (id_tx, hash, da) VALUES (:id_tx, :hash, 1)
+        "#,
+      )?,
+      insert_transaction: pool.prepare(
+        r#"
+          INSERT INTO tx (
+            id_tx, hash, id_trunk, id_branch, id_address, id_bundle, tag, value,
+            timestamp, current_idx, last_idx, is_mst, mst_a, solid
+          ) VALUES (
+            :id_tx, :hash, :id_trunk, :id_branch, :id_address, :id_bundle, :tag,
+            :value, :timestamp, :current_idx, :last_idx, :is_mst, :mst_a, :solid
+          )
         "#,
       )?,
       update_transaction: pool.prepare(
@@ -67,7 +77,8 @@ impl<'a> Mapper<'a> {
             current_idx = :current_idx,
             last_idx = :last_idx,
             is_mst = :is_mst,
-            mst_a = :mst_a
+            mst_a = :mst_a,
+            solid = solid
           WHERE hash = :hash
         "#,
       )?,
@@ -79,6 +90,11 @@ impl<'a> Mapper<'a> {
       direct_approve_transaction: pool.prepare(
         r#"
           UPDATE tx SET da = da + 1 WHERE id_tx = :id_tx
+        "#,
+      )?,
+      solidate_transaction: pool.prepare(
+        r#"
+          UPDATE tx SET solid = :solid WHERE id_tx = :id_tx
         "#,
       )?,
       select_addresses: pool.prepare(
@@ -137,23 +153,20 @@ impl<'a> Mapper<'a> {
     })?)
   }
 
-  pub fn select_transaction_id_by_hash(
-    &mut self,
-    hash: &str,
-  ) -> Result<Option<u64>> {
-    match self.select_transaction_by_hash(hash)? {
-      Some(mut result) => Ok(Some(
-        result.take_opt("id_tx").ok_or(Error::ColumnNotFound)??,
-      )),
-      None => Ok(None),
-    }
-  }
-
   pub fn select_transaction_by_id(
     &mut self,
     id_tx: u64,
   ) -> Result<Option<mysql::Row>> {
     Ok(self.select_transactions_by_id.first_exec(params!{
+      "id_tx" => id_tx,
+    })?)
+  }
+
+  pub fn select_child_transactions(
+    &mut self,
+    id_tx: u64,
+  ) -> Result<mysql::QueryResult> {
+    Ok(self.select_child_transactions.execute(params!{
       "id_tx" => id_tx,
     })?)
   }
@@ -189,6 +202,16 @@ impl<'a> Mapper<'a> {
   ) -> Result<mysql::QueryResult> {
     Ok(self.direct_approve_transaction.execute(params!{
       "id_tx" => id,
+    })?)
+  }
+
+  pub fn solidate_transaction(
+    &mut self,
+    id: u64,
+  ) -> Result<mysql::QueryResult> {
+    Ok(self.solidate_transaction.execute(params!{
+      "id_tx" => id,
+      "solid" => true,
     })?)
   }
 
@@ -302,6 +325,19 @@ impl<'a> Mapper<'a> {
     self.insert_event.execute(params!{
       "event" => "UNS",
       "count" => 1,
+      "timestamp" => timestamp,
+    })?;
+    Ok(())
+  }
+
+  pub fn subtangle_solidation_event(
+    &mut self,
+    timestamp: f64,
+    count: u32,
+  ) -> Result<()> {
+    self.insert_event.execute(params!{
+      "event" => "SOL",
+      "count" => count,
       "timestamp" => timestamp,
     })?;
     Ok(())

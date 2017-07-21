@@ -1,8 +1,6 @@
 array_layout = "Block"
 fn_args_layout = "Block"
 fn_call_style = "Block"
-force_format_strings = true
-format_strings = true
 generics_indent = "Block"
 generics_style = "Rfc"
 max_width = 80

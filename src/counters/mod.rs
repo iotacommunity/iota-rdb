@@ -2,9 +2,9 @@ mod error;
 
 pub use self::error::{Error, Result};
 use mysql;
+use std::fmt;
 use std::sync::Mutex;
 
-#[derive(Debug)]
 pub struct Counters {
   transaction: Mutex<u64>,
   address: Mutex<u64>,
@@ -64,5 +64,17 @@ impl Counters {
       }
       None => Ok(0),
     }
+  }
+}
+
+impl fmt::Display for Counters {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(
+      f,
+      "tx:{}, address:{}, bundle:{}",
+      *self.transaction.lock().expect("Mutex is poisoned"),
+      *self.address.lock().expect("Mutex is poisoned"),
+      *self.bundle.lock().expect("Mutex is poisoned"),
+    )
   }
 }
