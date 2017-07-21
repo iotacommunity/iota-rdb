@@ -105,7 +105,7 @@ impl<'a> Transaction<'a> {
   }
 
   pub fn process(
-    &self,
+    &mut self,
     mapper: &mut Mapper,
     counters: &Counters,
   ) -> Result<Option<Vec<u64>>> {
@@ -114,23 +114,13 @@ impl<'a> Transaction<'a> {
       return Ok(None);
     }
     let timestamp = utils::milliseconds_since_epoch()?;
-    let id_trunk = mapper.select_transaction_id_by_hash(self.trunk_hash)?;
-    let id_branch = mapper.select_transaction_id_by_hash(self.branch_hash)?;
-    if id_trunk.is_none() || id_branch.is_none() {
-      mapper.unsolid_transaction_event(timestamp)?;
+    let (id_trunk, trunk_is_solid) =
+      Self::check_node(mapper, counters, self.trunk_hash)?;
+    let (id_branch, branch_is_solid) =
+      Self::check_node(mapper, counters, self.branch_hash)?;
+    if !self.is_solid {
+      self.is_solid = trunk_is_solid && branch_is_solid;
     }
-    let id_trunk = Self::approve_or_insert_placeholder(
-      mapper,
-      counters,
-      id_trunk,
-      self.trunk_hash,
-    )?;
-    let id_branch = Self::approve_or_insert_placeholder(
-      mapper,
-      counters,
-      id_branch,
-      self.branch_hash,
-    )?;
     let id_address = mapper.fetch_address(counters, self.address_hash)?;
     let id_bundle = mapper.fetch_bundle(
       counters,
@@ -158,6 +148,9 @@ impl<'a> Transaction<'a> {
     } else {
       mapper.update_transaction(record)?;
     }
+    if !self.is_solid {
+      mapper.unsolid_transaction_event(timestamp)?;
+    }
     mapper.new_transaction_received_event(timestamp)?;
     if self.is_milestone {
       mapper.milestone_received_event(timestamp)?;
@@ -182,18 +175,28 @@ impl<'a> Transaction<'a> {
     Ok(false)
   }
 
-  fn approve_or_insert_placeholder(
+  fn check_node(
     mapper: &mut Mapper,
     counters: &Counters,
-    id: Option<u64>,
     hash: &str,
-  ) -> Result<u64> {
-    match id {
-      Some(id) => {
-        mapper.direct_approve_transaction(id)?;
-        Ok(id)
+  ) -> Result<(u64, bool)> {
+    match mapper.select_transaction_by_hash(hash)? {
+      Some(mut result) => {
+        let id_tx = result
+          .take_opt("id_tx")
+          .ok_or(mapper::Error::ColumnNotFound)?
+          .map_err(mapper::Error::from)?;
+        let is_solid = result
+          .take_opt("solid")
+          .ok_or(mapper::Error::ColumnNotFound)?
+          .map_err(mapper::Error::from)?;
+        mapper.direct_approve_transaction(id_tx)?;
+        Ok((id_tx, is_solid))
       }
-      None => Ok(mapper.insert_transaction_placeholder(counters, hash)?),
+      None => Ok((
+        mapper.insert_transaction_placeholder(counters, hash)?,
+        false,
+      )),
     }
   }
 }

@@ -30,7 +30,7 @@ impl<'a> WritePool<'a> {
           &milestone_address,
           &milestone_start_index,
         ) {
-          Ok(transaction) => {
+          Ok(mut transaction) => {
             match transaction.process(&mut mapper, &counters) {
               Ok(Some(vec)) => {
                 approve_tx.send(vec).expect("Thread communication failure");
