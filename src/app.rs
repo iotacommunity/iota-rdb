@@ -1,7 +1,7 @@
 use clap::{App, Arg};
 
 const DEFAULT_MILESTONE_ADDRESS: &str = "KPWCHICGJZXKE9GSUDXZYUAPLHAKAHYHDXNPHENTERYMMBQOPSQIDENXKLKCEYCPVTZQLEEJVYJZV9BWU";
-const DEFAULT_MILESTONE_START_INDEX: &str = "HADC99999999999999999999999";
+const DEFAULT_MILESTONE_START_INDEX: &str = "62000";
 
 pub fn build<'a, 'b>() -> App<'a, 'b> {
   app_from_crate!()
@@ -43,7 +43,7 @@ pub fn build<'a, 'b>() -> App<'a, 'b> {
     )
     .arg(
       Arg::with_name("solidate_threads_count")
-        .short("a")
+        .short("s")
         .long("solidate-threads")
         .takes_value(true)
         .value_name("COUNT")
@@ -52,7 +52,7 @@ pub fn build<'a, 'b>() -> App<'a, 'b> {
     )
     .arg(
       Arg::with_name("milestone_address")
-        .short("s")
+        .short("M")
         .long("milestone-address")
         .takes_value(true)
         .value_name("ADDRESS")
@@ -61,7 +61,7 @@ pub fn build<'a, 'b>() -> App<'a, 'b> {
     )
     .arg(
       Arg::with_name("milestone_start_index")
-        .short("i")
+        .short("I")
         .long("milestone-start-index")
         .takes_value(true)
         .value_name("INDEX")

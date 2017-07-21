@@ -6,6 +6,7 @@ pub enum Error {
   WriteThreadsParseInt(num::ParseIntError),
   ApproveThreadsParseInt(num::ParseIntError),
   SolidateThreadsParseInt(num::ParseIntError),
+  MilestoneStartIndexParseInt(num::ParseIntError),
 }
 
 pub type Result<T> = result::Result<T, Error>;
@@ -23,6 +24,9 @@ impl fmt::Display for Error {
       Error::SolidateThreadsParseInt(ref err) => {
         write!(f, "{} (solidate-threads)", err)
       }
+      Error::MilestoneStartIndexParseInt(ref err) => {
+        write!(f, "{} (milestone-start-index)", err)
+      }
     }
   }
 }
@@ -33,7 +37,8 @@ impl error::Error for Error {
       Error::ArgNotFound => "Argument not found",
       Error::WriteThreadsParseInt(ref err) |
       Error::ApproveThreadsParseInt(ref err) |
-      Error::SolidateThreadsParseInt(ref err) => err.description(),
+      Error::SolidateThreadsParseInt(ref err) |
+      Error::MilestoneStartIndexParseInt(ref err) => err.description(),
     }
   }
 
@@ -42,7 +47,8 @@ impl error::Error for Error {
       Error::ArgNotFound => None,
       Error::WriteThreadsParseInt(ref err) |
       Error::ApproveThreadsParseInt(ref err) |
-      Error::SolidateThreadsParseInt(ref err) => Some(err),
+      Error::SolidateThreadsParseInt(ref err) |
+      Error::MilestoneStartIndexParseInt(ref err) => Some(err),
     }
   }
 }

@@ -30,6 +30,14 @@ fn main() {
     exit(1);
   });
 
+  if args.verbose() {
+    println!("Milestone address: {}", args.milestone_address());
+    println!(
+      "Milestone start index string: {}",
+      args.milestone_start_index()
+    );
+  }
+
   let pool = mysql::Pool::new(args.mysql_uri()).expect("MySQL connect failure");
   let counters =
     Arc::new(Counters::new(&pool).expect("MySQL counters failure"));
@@ -40,7 +48,7 @@ fn main() {
   let (solidate_tx, solidate_rx) = mpsc::channel();
 
   if args.verbose() {
-    println!("{:?}", counters);
+    println!("Highest ids: {}", counters);
   }
 
   socket.connect(args.zmq_uri()).expect(
