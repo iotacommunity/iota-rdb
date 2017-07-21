@@ -15,7 +15,8 @@ pub struct Mapper<'a> {
   update_transaction: mysql::Stmt<'a>,
   approve_transaction: mysql::Stmt<'a>,
   direct_approve_transaction: mysql::Stmt<'a>,
-  solidate_transaction: mysql::Stmt<'a>,
+  solidate_branch_transaction: mysql::Stmt<'a>,
+  solidate_trunk_transaction: mysql::Stmt<'a>,
   select_addresses: mysql::Stmt<'a>,
   insert_address: mysql::Stmt<'a>,
   select_bundles: mysql::Stmt<'a>,
@@ -43,7 +44,7 @@ impl<'a> Mapper<'a> {
       select_child_transactions: pool.prepare(
         r#"
           SELECT
-            id_tx
+            id_tx, id_trunk, id_branch, solid
           FROM tx
           WHERE id_trunk = :id_tx OR id_branch = :id_tx
         "#,
@@ -78,7 +79,7 @@ impl<'a> Mapper<'a> {
             last_idx = :last_idx,
             is_mst = :is_mst,
             mst_a = :mst_a,
-            solid = solid
+            solid = :solid
           WHERE hash = :hash
         "#,
       )?,
@@ -92,9 +93,14 @@ impl<'a> Mapper<'a> {
           UPDATE tx SET da = da + 1 WHERE id_tx = :id_tx
         "#,
       )?,
-      solidate_transaction: pool.prepare(
+      solidate_branch_transaction: pool.prepare(
         r#"
           UPDATE tx SET solid = :solid WHERE id_tx = :id_tx
+        "#,
+      )?,
+      solidate_trunk_transaction: pool.prepare(
+        r#"
+          UPDATE tx SET height = :height, solid = :solid WHERE id_tx = :id_tx
         "#,
       )?,
       select_addresses: pool.prepare(
@@ -205,12 +211,24 @@ impl<'a> Mapper<'a> {
     })?)
   }
 
-  pub fn solidate_transaction(
+  pub fn solidate_branch_transaction(
     &mut self,
     id: u64,
   ) -> Result<mysql::QueryResult> {
-    Ok(self.solidate_transaction.execute(params!{
+    Ok(self.solidate_branch_transaction.execute(params!{
       "id_tx" => id,
+      "solid" => true,
+    })?)
+  }
+
+  pub fn solidate_trunk_transaction(
+    &mut self,
+    id: u64,
+    height: i32,
+  ) -> Result<mysql::QueryResult> {
+    Ok(self.solidate_trunk_transaction.execute(params!{
+      "id_tx" => id,
+      "height" => height,
       "solid" => true,
     })?)
   }
@@ -311,7 +329,7 @@ impl<'a> Mapper<'a> {
   pub fn subtanble_confirmation_event(
     &mut self,
     timestamp: f64,
-    count: u32,
+    count: i32,
   ) -> Result<()> {
     self.insert_event.execute(params!{
       "event" => "CNF",
@@ -333,7 +351,7 @@ impl<'a> Mapper<'a> {
   pub fn subtangle_solidation_event(
     &mut self,
     timestamp: f64,
-    count: u32,
+    count: i32,
   ) -> Result<()> {
     self.insert_event.execute(params!{
       "event" => "SOL",

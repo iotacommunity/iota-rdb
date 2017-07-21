@@ -109,23 +109,39 @@ impl<'a> Transaction<'a> {
 
   pub fn solidate(mapper: &mut Mapper, hash: &str) -> Result<()> {
     let (timestamp, mut counter) = (utils::milliseconds_since_epoch()?, 0);
-    let mut ids = Vec::new();
-    ids.push(mapper
+    let id = mapper
       .select_transaction_by_hash(hash)?
       .ok_or(mapper::Error::RecordNotFound)?
       .take_opt("id_tx")
-      .ok_or(mapper::Error::ColumnNotFound)??);
-    while let Some(parent_id) = ids.pop() {
-      let mut child_ids = Vec::new();
-      for row in mapper.select_child_transactions(parent_id)? {
-        let id = row?.take_opt("id_tx").ok_or(mapper::Error::ColumnNotFound)??;
-        child_ids.push(id);
+      .ok_or(mapper::Error::ColumnNotFound)??;
+    let mut nodes = vec![(id, Some(0))];
+    while let Some((parent_id, parent_height)) = nodes.pop() {
+      let (mut trunk_ids, mut branch_ids) = (Vec::new(), Vec::new());
+      for result in mapper.select_child_transactions(parent_id)? {
+        let mut row = result?;
+        let solid =
+          row.take_opt("solid").ok_or(mapper::Error::ColumnNotFound)??;
+        if solid {
+          continue;
+        }
+        let id = row.take_opt("id_tx").ok_or(mapper::Error::ColumnNotFound)??;
+        let id_trunk: u64 = row.take_opt("id_trunk").ok_or(
+          mapper::Error::ColumnNotFound,
+        )??;
+        let id_branch: u64 = row.take_opt("id_branch").ok_or(
+          mapper::Error::ColumnNotFound,
+        )??;
+        if id_trunk == parent_id {
+          trunk_ids.push(id);
+        }
+        if id_branch == parent_id {
+          branch_ids.push(id);
+        }
       }
-      for id in child_ids {
-        mapper.solidate_transaction(id)?;
-        counter += 1;
-        ids.push(id);
-      }
+      Self::solidate_nodes(mapper, &mut nodes, &trunk_ids, parent_height)?;
+      Self::solidate_nodes(mapper, &mut nodes, &branch_ids, None)?;
+      counter += trunk_ids.len() as i32;
+      counter += branch_ids.len() as i32;
     }
     if counter > 0 {
       mapper.subtangle_solidation_event(timestamp, counter)?;
@@ -231,5 +247,26 @@ impl<'a> Transaction<'a> {
         false,
       )),
     }
+  }
+
+  fn solidate_nodes(
+    mapper: &mut Mapper,
+    nodes: &mut Vec<(u64, Option<i32>)>,
+    ids: &[u64],
+    height: Option<i32>,
+  ) -> Result<()> {
+    if let Some(mut height) = height {
+      height += 1;
+      for id in ids {
+        mapper.solidate_trunk_transaction(*id, height)?;
+        nodes.push((*id, Some(height)));
+      }
+    } else {
+      for id in ids {
+        mapper.solidate_branch_transaction(*id)?;
+        nodes.push((*id, None));
+      }
+    }
+    Ok(())
   }
 }
