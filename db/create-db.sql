@@ -73,8 +73,10 @@ CREATE TABLE `tx` (
   `solid` char(1) DEFAULT '0',
   PRIMARY KEY (`id_tx`),
   UNIQUE KEY `hash_UNIQUE` (`hash`) USING BTREE,
-  KEY `id_bundle_INDEX` (`id_bundle`),
+  KEY `id_trunk_INDEX` (`id_trunk`),
+  KEY `id_branch_INDEX` (`id_branch`),
   KEY `id_address_INDEX` (`id_address`),
+  KEY `id_bundle_INDEX` (`id_bundle`),
   KEY `da_INDEX` (`da`),
   KEY `is_mst_INDEX` (`is_mst`),
   KEY `mst_a_INDEX` (`mst_a`)

@@ -1,4 +1,5 @@
 use mapper;
+use mysql;
 use std::{error, fmt, num, result, time};
 
 #[derive(Debug)]
@@ -53,5 +54,11 @@ impl From<num::ParseIntError> for Error {
 impl From<time::SystemTimeError> for Error {
   fn from(err: time::SystemTimeError) -> Error {
     Error::SystemTime(err)
+  }
+}
+
+impl From<mysql::Error> for Error {
+  fn from(err: mysql::Error) -> Error {
+    Error::Mapper(mapper::Error::from(err))
   }
 }

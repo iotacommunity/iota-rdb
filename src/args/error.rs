@@ -5,6 +5,7 @@ pub enum Error {
   ArgNotFound,
   WriteThreadsParseInt(num::ParseIntError),
   ApproveThreadsParseInt(num::ParseIntError),
+  SolidateThreadsParseInt(num::ParseIntError),
 }
 
 pub type Result<T> = result::Result<T, Error>;
@@ -19,6 +20,9 @@ impl fmt::Display for Error {
       Error::ApproveThreadsParseInt(ref err) => {
         write!(f, "{} (approve-threads)", err)
       }
+      Error::SolidateThreadsParseInt(ref err) => {
+        write!(f, "{} (solidate-threads)", err)
+      }
     }
   }
 }
@@ -28,7 +32,8 @@ impl error::Error for Error {
     match *self {
       Error::ArgNotFound => "Argument not found",
       Error::WriteThreadsParseInt(ref err) |
-      Error::ApproveThreadsParseInt(ref err) => err.description(),
+      Error::ApproveThreadsParseInt(ref err) |
+      Error::SolidateThreadsParseInt(ref err) => err.description(),
     }
   }
 
@@ -36,7 +41,8 @@ impl error::Error for Error {
     match *self {
       Error::ArgNotFound => None,
       Error::WriteThreadsParseInt(ref err) |
-      Error::ApproveThreadsParseInt(ref err) => Some(err),
+      Error::ApproveThreadsParseInt(ref err) |
+      Error::SolidateThreadsParseInt(ref err) => Some(err),
     }
   }
 }

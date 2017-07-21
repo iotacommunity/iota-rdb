@@ -24,6 +24,9 @@ pub struct Transaction<'a> {
   is_solid: bool,
 }
 
+pub type ApproveIds = Option<Vec<u64>>;
+pub type SolidHash = Option<String>;
+
 impl<'a> Transaction<'a> {
   pub fn parse(
     source: &'a str,
@@ -104,14 +107,35 @@ impl<'a> Transaction<'a> {
     Ok(())
   }
 
+  pub fn solidate(mapper: &mut Mapper, hash: &str) -> Result<()> {
+    let mut ids = Vec::new();
+    ids.push(mapper
+      .select_transaction_by_hash(hash)?
+      .ok_or(mapper::Error::RecordNotFound)?
+      .take_opt("id_tx")
+      .ok_or(mapper::Error::ColumnNotFound)??);
+    while let Some(parent_id) = ids.pop() {
+      let mut child_ids = Vec::new();
+      for row in mapper.select_child_transactions(parent_id)? {
+        let id = row?.take_opt("id_tx").ok_or(mapper::Error::ColumnNotFound)??;
+        child_ids.push(id);
+      }
+      for id in child_ids {
+        mapper.solidate_transaction(id)?;
+        ids.push(id);
+      }
+    }
+    Ok(())
+  }
+
   pub fn process(
     &mut self,
     mapper: &mut Mapper,
     counters: &Counters,
-  ) -> Result<Option<Vec<u64>>> {
+  ) -> Result<(ApproveIds, SolidHash)> {
     let mut result = mapper.select_transaction_by_hash(self.hash)?;
     if Self::is_duplicate(&mut result)? {
-      return Ok(None);
+      return Ok((None, None));
     }
     let timestamp = utils::milliseconds_since_epoch()?;
     let (id_trunk, trunk_is_solid) =
@@ -152,12 +176,18 @@ impl<'a> Transaction<'a> {
       mapper.unsolid_transaction_event(timestamp)?;
     }
     mapper.new_transaction_received_event(timestamp)?;
-    if self.is_milestone {
+    let approve_ids = if self.is_milestone {
       mapper.milestone_received_event(timestamp)?;
-      Ok(Some(vec![id_trunk, id_branch]))
+      Some(vec![id_trunk, id_branch])
     } else {
-      Ok(None)
-    }
+      None
+    };
+    let solid_hash = if self.is_solid && !result.is_none() {
+      Some(self.hash.to_owned())
+    } else {
+      None
+    };
+    Ok((approve_ids, solid_hash))
   }
 
   fn is_duplicate(result: &mut Option<mysql::Row>) -> Result<bool> {
@@ -182,14 +212,12 @@ impl<'a> Transaction<'a> {
   ) -> Result<(u64, bool)> {
     match mapper.select_transaction_by_hash(hash)? {
       Some(mut result) => {
-        let id_tx = result
-          .take_opt("id_tx")
-          .ok_or(mapper::Error::ColumnNotFound)?
-          .map_err(mapper::Error::from)?;
-        let is_solid = result
-          .take_opt("solid")
-          .ok_or(mapper::Error::ColumnNotFound)?
-          .map_err(mapper::Error::from)?;
+        let id_tx = result.take_opt("id_tx").ok_or(
+          mapper::Error::ColumnNotFound,
+        )??;
+        let is_solid = result.take_opt("solid").ok_or(
+          mapper::Error::ColumnNotFound,
+        )??;
         mapper.direct_approve_transaction(id_tx)?;
         Ok((id_tx, is_solid))
       }

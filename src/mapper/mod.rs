@@ -9,11 +9,13 @@ use mysql;
 pub struct Mapper<'a> {
   select_transactions_by_hash: mysql::Stmt<'a>,
   select_transactions_by_id: mysql::Stmt<'a>,
+  select_child_transactions: mysql::Stmt<'a>,
   insert_transaction: mysql::Stmt<'a>,
   insert_transaction_placeholder: mysql::Stmt<'a>,
   update_transaction: mysql::Stmt<'a>,
   approve_transaction: mysql::Stmt<'a>,
   direct_approve_transaction: mysql::Stmt<'a>,
+  solidate_transaction: mysql::Stmt<'a>,
   select_addresses: mysql::Stmt<'a>,
   insert_address: mysql::Stmt<'a>,
   select_bundles: mysql::Stmt<'a>,
@@ -36,6 +38,14 @@ impl<'a> Mapper<'a> {
             id_tx, id_trunk, id_branch, id_bundle, current_idx, mst_a
           FROM tx
           WHERE id_tx = :id_tx
+        "#,
+      )?,
+      select_child_transactions: pool.prepare(
+        r#"
+          SELECT
+            id_tx
+          FROM tx
+          WHERE id_trunk = :id_tx OR id_branch = :id_tx
         "#,
       )?,
       insert_transaction_placeholder: pool.prepare(
@@ -80,6 +90,11 @@ impl<'a> Mapper<'a> {
       direct_approve_transaction: pool.prepare(
         r#"
           UPDATE tx SET da = da + 1 WHERE id_tx = :id_tx
+        "#,
+      )?,
+      solidate_transaction: pool.prepare(
+        r#"
+          UPDATE tx SET solid = :solid WHERE id_tx = :id_tx
         "#,
       )?,
       select_addresses: pool.prepare(
@@ -147,6 +162,15 @@ impl<'a> Mapper<'a> {
     })?)
   }
 
+  pub fn select_child_transactions(
+    &mut self,
+    id_tx: u64,
+  ) -> Result<mysql::QueryResult> {
+    Ok(self.select_child_transactions.execute(params!{
+      "id_tx" => id_tx,
+    })?)
+  }
+
   pub fn insert_transaction(
     &mut self,
     counters: &Counters,
@@ -178,6 +202,16 @@ impl<'a> Mapper<'a> {
   ) -> Result<mysql::QueryResult> {
     Ok(self.direct_approve_transaction.execute(params!{
       "id_tx" => id,
+    })?)
+  }
+
+  pub fn solidate_transaction(
+    &mut self,
+    id: u64,
+  ) -> Result<mysql::QueryResult> {
+    Ok(self.solidate_transaction.execute(params!{
+      "id_tx" => id,
+      "solid" => true,
     })?)
   }
 

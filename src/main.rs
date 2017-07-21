@@ -21,7 +21,7 @@ use args::Args;
 use counters::Counters;
 use std::process::exit;
 use std::sync::{Arc, mpsc};
-use worker::{ApprovePool, WritePool, ZmqReader};
+use worker::{ApprovePool, SolidatePool, WritePool, ZmqReader};
 
 fn main() {
   let matches = app::build().get_matches();
@@ -35,8 +35,9 @@ fn main() {
     Arc::new(Counters::new(&pool).expect("MySQL counters failure"));
   let ctx = zmq::Context::new();
   let socket = ctx.socket(zmq::SUB).expect("ZMQ socket create failure");
-  let (write_tx, write_rx) = mpsc::channel::<String>();
-  let (approve_tx, approve_rx) = mpsc::channel::<Vec<u64>>();
+  let (write_tx, write_rx) = mpsc::channel();
+  let (approve_tx, approve_rx) = mpsc::channel();
+  let (solidate_tx, solidate_rx) = mpsc::channel();
 
   if args.verbose() {
     println!("{:?}", counters);
@@ -49,6 +50,7 @@ fn main() {
   WritePool {
     rx: write_rx,
     approve_tx: &approve_tx,
+    solidate_tx: &solidate_tx,
     pool: &pool,
     counters: counters,
     milestone_address: args.milestone_address(),
@@ -61,6 +63,10 @@ fn main() {
     args.approve_threads_count(),
     args.verbose(),
   );
+  SolidatePool {
+    rx: solidate_rx,
+    pool: &pool,
+  }.run(args.solidate_threads_count(), args.verbose());
   ZmqReader {
     socket: &socket,
     tx: &write_tx,

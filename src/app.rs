@@ -42,6 +42,15 @@ pub fn build<'a, 'b>() -> App<'a, 'b> {
         .help("Count of milestone approval worker threads"),
     )
     .arg(
+      Arg::with_name("solidate_threads_count")
+        .short("a")
+        .long("solidate-threads")
+        .takes_value(true)
+        .value_name("COUNT")
+        .default_value("1")
+        .help("Count of solidity check worker threads"),
+    )
+    .arg(
       Arg::with_name("milestone_address")
         .short("s")
         .long("milestone-address")

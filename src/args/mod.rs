@@ -8,6 +8,7 @@ pub struct Args<'a> {
   mysql_uri: &'a str,
   write_threads_count: usize,
   approve_threads_count: usize,
+  solidate_threads_count: usize,
   milestone_address: &'a str,
   milestone_start_index: &'a str,
   verbose: bool,
@@ -28,6 +29,11 @@ impl<'a> Args<'a> {
         .ok_or(Error::ArgNotFound)?
         .parse()
         .map_err(Error::ApproveThreadsParseInt)?,
+      solidate_threads_count: matches
+        .value_of("solidate_threads_count")
+        .ok_or(Error::ArgNotFound)?
+        .parse()
+        .map_err(Error::SolidateThreadsParseInt)?,
       milestone_address: matches.value_of("milestone_address").ok_or(
         Error::ArgNotFound,
       )?,
@@ -52,6 +58,10 @@ impl<'a> Args<'a> {
 
   pub fn approve_threads_count(&self) -> usize {
     self.approve_threads_count
+  }
+
+  pub fn solidate_threads_count(&self) -> usize {
+    self.solidate_threads_count
   }
 
   pub fn milestone_address(&self) -> &str {
