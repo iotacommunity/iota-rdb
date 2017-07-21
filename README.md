@@ -6,7 +6,7 @@
 
 ## Building
 
-We are using the nightly channel of [Rust][rust]. To install it, run the
+We are using the *nightly* channel of [Rust][rust]. To install it, run the
 following command:
 
 ```sh
