@@ -1,8 +1,9 @@
 mod error;
-mod transaction_record;
+mod records;
 
 pub use self::error::{Error, Result};
-pub use self::transaction_record::TransactionRecord;
+pub use self::records::{ChildTransaction, NewTransaction, TransactionByHash,
+                        TransactionById};
 use counters::Counters;
 use mysql;
 
@@ -153,34 +154,64 @@ impl<'a> Mapper<'a> {
   pub fn select_transaction_by_hash(
     &mut self,
     hash: &str,
-  ) -> Result<Option<mysql::Row>> {
-    Ok(self.select_transactions_by_hash.first_exec(params!{
+  ) -> Result<Option<TransactionByHash>> {
+    match self.select_transactions_by_hash.first_exec(params!{
       "hash" => hash,
-    })?)
+    })? {
+      Some(mut row) => Ok(Some(TransactionByHash {
+        id_tx: row.take_opt("id_tx").ok_or(Error::ColumnNotFound)?,
+        id_trunk: row.take_opt("id_trunk").ok_or(Error::ColumnNotFound)?,
+        id_branch: row.take_opt("id_branch").ok_or(Error::ColumnNotFound)?,
+        solid: row.take_opt("solid").ok_or(Error::ColumnNotFound)?,
+      })),
+      None => Ok(None),
+    }
   }
 
   pub fn select_transaction_by_id(
     &mut self,
     id_tx: u64,
-  ) -> Result<Option<mysql::Row>> {
-    Ok(self.select_transactions_by_id.first_exec(params!{
-      "id_tx" => id_tx,
-    })?)
+  ) -> Result<TransactionById> {
+    let mut row = self
+      .select_transactions_by_id
+      .first_exec(params!{
+        "id_tx" => id_tx,
+      })?
+      .ok_or(Error::RecordNotFound)?;
+    Ok(TransactionById {
+      mst_a: row.take_opt("mst_a").ok_or(Error::ColumnNotFound)?,
+      id_trunk: row.take_opt("id_trunk").ok_or(Error::ColumnNotFound)?,
+      id_branch: row.take_opt("id_branch").ok_or(Error::ColumnNotFound)?,
+      id_bundle: row.take_opt("id_bundle").ok_or(Error::ColumnNotFound)?,
+      current_idx: row.take_opt("current_idx").ok_or(Error::ColumnNotFound)?,
+    })
   }
 
   pub fn select_child_transactions(
     &mut self,
     id_tx: u64,
-  ) -> Result<mysql::QueryResult> {
-    Ok(self.select_child_transactions.execute(params!{
+  ) -> Result<Vec<ChildTransaction>> {
+    let mut records = Vec::new();
+    let results = self.select_child_transactions.execute(params!{
       "id_tx" => id_tx,
-    })?)
+    })?;
+    for row in results {
+      let mut row = row?;
+      records.push(ChildTransaction {
+        id_tx: row.take_opt("id_tx").ok_or(Error::ColumnNotFound)?,
+        id_trunk: row.take_opt("id_trunk").ok_or(Error::ColumnNotFound)?,
+        id_branch: row.take_opt("id_branch").ok_or(Error::ColumnNotFound)?,
+        height: row.take_opt("height").ok_or(Error::ColumnNotFound)?,
+        solid: row.take_opt("solid").ok_or(Error::ColumnNotFound)?,
+      });
+    }
+    Ok(records)
   }
 
   pub fn insert_transaction(
     &mut self,
     counters: &Counters,
-    transaction: TransactionRecord,
+    transaction: NewTransaction,
   ) -> Result<mysql::QueryResult> {
     let id_tx = counters.next_transaction();
     let mut params = transaction.to_params();
@@ -190,7 +221,7 @@ impl<'a> Mapper<'a> {
 
   pub fn update_transaction(
     &mut self,
-    transaction: TransactionRecord,
+    transaction: NewTransaction,
   ) -> Result<mysql::QueryResult> {
     Ok(self.update_transaction.execute(transaction.to_params())?)
   }

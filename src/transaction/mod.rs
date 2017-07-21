@@ -2,8 +2,7 @@ mod error;
 
 pub use self::error::{Error, Result};
 use counters::Counters;
-use mapper::{self, Mapper};
-use mysql;
+use mapper::{self, Mapper, NewTransaction};
 use utils;
 
 pub const TAG_LENGTH: usize = 27;
@@ -65,36 +64,20 @@ impl<'a> Transaction<'a> {
   pub fn approve(mapper: &mut Mapper, mut ids: Vec<u64>) -> Result<()> {
     let (timestamp, mut counter) = (utils::milliseconds_since_epoch()?, 0);
     while let Some(id) = ids.pop() {
-      let mut row = mapper.select_transaction_by_id(id)?.ok_or(
-        mapper::Error::RecordNotFound,
-      )?;
-      let milestone_approved =
-        row.take_opt("mst_a").ok_or(mapper::Error::ColumnNotFound)?;
-      if milestone_approved.unwrap_or(false) {
+      let record = mapper.select_transaction_by_id(id)?;
+      if record.mst_a.unwrap_or(false) {
         continue;
       }
-      let id_trunk = row
-        .take_opt("id_trunk")
-        .ok_or(mapper::Error::ColumnNotFound)?
-        .unwrap_or(0);
-      let id_branch = row
-        .take_opt("id_branch")
-        .ok_or(mapper::Error::ColumnNotFound)?
-        .unwrap_or(0);
-      let current_index = row.take_opt("current_idx").ok_or(
-        mapper::Error::ColumnNotFound,
-      )?;
+      let id_trunk = record.id_trunk.unwrap_or(0);
+      let id_branch = record.id_branch.unwrap_or(0);
       if id_trunk != 0 {
         ids.push(id_trunk);
       }
       if id_branch != 0 {
         ids.push(id_branch);
       }
-      if let Ok(0) = current_index {
-        let id_bundle = row.take_opt("id_bundle").ok_or(
-          mapper::Error::ColumnNotFound,
-        )?;
-        if let Ok(id_bundle) = id_bundle {
+      if let Ok(0) = record.current_idx {
+        if let Ok(id_bundle) = record.id_bundle {
           mapper.update_bundle(id_bundle, timestamp)?;
         }
       }
@@ -112,29 +95,15 @@ impl<'a> Transaction<'a> {
     let id = mapper
       .select_transaction_by_hash(hash)?
       .ok_or(mapper::Error::RecordNotFound)?
-      .take_opt("id_tx")
-      .ok_or(mapper::Error::ColumnNotFound)??;
+      .id_tx?;
     let mut nodes = vec![(id, Some(0))];
     while let Some((parent_id, parent_height)) = nodes.pop() {
       let (mut trunk, mut branch) = (Vec::new(), Vec::new());
-      for result in mapper.select_child_transactions(parent_id)? {
-        let mut row = result?;
-        let id = row.take_opt("id_tx").ok_or(mapper::Error::ColumnNotFound)??;
-        let height: i32 =
-          row.take_opt("height").ok_or(mapper::Error::ColumnNotFound)??;
-        let solid =
-          row.take_opt("solid").ok_or(mapper::Error::ColumnNotFound)??;
-        let id_trunk: u64 = row.take_opt("id_trunk").ok_or(
-          mapper::Error::ColumnNotFound,
-        )??;
-        let id_branch: u64 = row.take_opt("id_branch").ok_or(
-          mapper::Error::ColumnNotFound,
-        )??;
-        if id_trunk == parent_id {
-          trunk.push((id, height, solid));
-        }
-        if id_branch == parent_id {
-          branch.push((id, height, solid));
+      for record in mapper.select_child_transactions(parent_id)? {
+        if record.id_trunk? == parent_id {
+          trunk.push((record.id_tx?, record.height?, record.solid?));
+        } else if record.id_branch? == parent_id {
+          branch.push((record.id_tx?, record.height?, record.solid?));
         }
       }
       Self::solidate_nodes(mapper, &mut nodes, &trunk, 0b10, parent_height)?;
@@ -153,10 +122,17 @@ impl<'a> Transaction<'a> {
     mapper: &mut Mapper,
     counters: &Counters,
   ) -> Result<(ApproveIds, SolidHash)> {
-    let mut result = mapper.select_transaction_by_hash(self.hash)?;
-    if Self::is_duplicate(&mut result)? {
-      return Ok((None, None));
-    }
+    let result = mapper.select_transaction_by_hash(self.hash)?;
+    let new_record = if let Some(record) = result {
+      if record.id_trunk.unwrap_or(0) != 0 &&
+        record.id_branch.unwrap_or(0) != 0
+      {
+        return Ok((None, None));
+      }
+      false
+    } else {
+      true
+    };
     let timestamp = utils::milliseconds_since_epoch()?;
     let (id_trunk, trunk_solid) =
       Self::check_node(mapper, counters, self.trunk_hash)?;
@@ -175,7 +151,7 @@ impl<'a> Transaction<'a> {
       (if trunk_solid == 0b11 { 0b10 } else { 0b00 }) |
         (if branch_solid == 0b11 { 0b01 } else { 0b00 })
     };
-    let record = mapper::TransactionRecord {
+    let record = NewTransaction {
       hash: self.hash,
       id_trunk: id_trunk,
       id_branch: id_branch,
@@ -190,7 +166,7 @@ impl<'a> Transaction<'a> {
       mst_a: self.is_milestone,
       solid: solid,
     };
-    if result.is_none() {
+    if new_record {
       mapper.insert_transaction(counters, record)?;
     } else {
       mapper.update_transaction(record)?;
@@ -205,27 +181,12 @@ impl<'a> Transaction<'a> {
     } else {
       None
     };
-    let solid_hash = if self.solid && !result.is_none() {
+    let solid_hash = if self.solid && !new_record {
       Some(self.hash.to_owned())
     } else {
       None
     };
     Ok((approve_ids, solid_hash))
-  }
-
-  fn is_duplicate(result: &mut Option<mysql::Row>) -> Result<bool> {
-    if let Some(ref mut row) = *result {
-      let id_trunk = row.take_opt("id_trunk").ok_or(
-        mapper::Error::ColumnNotFound,
-      )?;
-      let id_branch = row.take_opt("id_branch").ok_or(
-        mapper::Error::ColumnNotFound,
-      )?;
-      if id_trunk.unwrap_or(0) != 0 && id_branch.unwrap_or(0) != 0 {
-        return Ok(true);
-      }
-    }
-    Ok(false)
   }
 
   fn check_node(
@@ -234,15 +195,10 @@ impl<'a> Transaction<'a> {
     hash: &str,
   ) -> Result<(u64, u8)> {
     match mapper.select_transaction_by_hash(hash)? {
-      Some(mut result) => {
-        let id_tx = result.take_opt("id_tx").ok_or(
-          mapper::Error::ColumnNotFound,
-        )??;
-        let solid = result.take_opt("solid").ok_or(
-          mapper::Error::ColumnNotFound,
-        )??;
+      Some(record) => {
+        let id_tx = record.id_tx?;
         mapper.direct_approve_transaction(id_tx)?;
-        Ok((id_tx, solid))
+        Ok((id_tx, record.solid?))
       }
       None => Ok((
         mapper.insert_transaction_placeholder(counters, hash)?,
