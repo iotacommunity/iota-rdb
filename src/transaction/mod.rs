@@ -6,6 +6,7 @@ use mapper::{self, Mapper, NewTransaction};
 use utils;
 
 pub const TAG_LENGTH: usize = 27;
+const NULL_HASH: &str = "999999999999999999999999999999999999999999999999999999999999999999999999999999999";
 
 #[derive(Debug)]
 pub struct Transaction<'a> {
@@ -196,10 +197,14 @@ impl<'a> Transaction<'a> {
         mapper.direct_approve_transaction(id_tx)?;
         Ok((id_tx, record.solid?))
       }
-      None => Ok((
-        mapper.insert_transaction_placeholder(counters, hash)?,
-        0b00,
-      )),
+      None => {
+        let solid = if hash == NULL_HASH { 0b11 } else { 0b00 };
+        Ok((
+          mapper
+            .insert_transaction_placeholder(counters, hash, solid)?,
+          solid,
+        ))
+      }
     }
   }
 

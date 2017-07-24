@@ -52,7 +52,11 @@ impl<'a> Mapper<'a> {
       )?,
       insert_transaction_placeholder: pool.prepare(
         r#"
-          INSERT INTO tx (id_tx, hash, da) VALUES (:id_tx, :hash, 1)
+          INSERT INTO tx (
+            id_tx, hash, da, solid
+          ) VALUES (
+            :id_tx, :hash, 1, solid
+          )
         "#,
       )?,
       insert_transaction: pool.prepare(
@@ -268,11 +272,13 @@ impl<'a> Mapper<'a> {
     &mut self,
     counters: &Counters,
     hash: &str,
+    solid: u8,
   ) -> Result<u64> {
     let id_tx = counters.next_transaction();
     self.insert_transaction_placeholder.execute(params!{
       "id_tx" => id_tx,
       "hash" => hash,
+      "solid" => solid,
     })?;
     Ok(id_tx)
   }
