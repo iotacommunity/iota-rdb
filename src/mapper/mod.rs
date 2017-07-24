@@ -65,10 +65,11 @@ impl<'a> Mapper<'a> {
         r#"
           INSERT INTO tx (
             id_tx, hash, id_trunk, id_branch, id_address, id_bundle, tag, value,
-            timestamp, current_idx, last_idx, is_mst, mst_a, solid
+            timestamp, current_idx, last_idx, height, is_mst, mst_a, solid
           ) VALUES (
             :id_tx, :hash, :id_trunk, :id_branch, :id_address, :id_bundle, :tag,
-            :value, :timestamp, :current_idx, :last_idx, :is_mst, :mst_a, :solid
+            :value, :timestamp, :current_idx, :last_idx, :height, :is_mst,
+            :mst_a, :solid
           )
         "#,
       )?,
@@ -84,6 +85,7 @@ impl<'a> Mapper<'a> {
             timestamp = :timestamp,
             current_idx = :current_idx,
             last_idx = :last_idx,
+            height = :height,
             is_mst = :is_mst,
             mst_a = :mst_a,
             solid = :solid

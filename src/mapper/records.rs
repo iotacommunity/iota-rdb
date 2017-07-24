@@ -46,6 +46,7 @@ impl<'a> NewTransaction<'a> {
       "timestamp" => self.timestamp,
       "current_idx" => self.current_idx,
       "last_idx" => self.last_idx,
+      "height" => self.height,
       "is_mst" => self.is_mst,
       "mst_a" => self.mst_a,
       "solid" => self.solid,

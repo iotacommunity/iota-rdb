@@ -155,23 +155,23 @@ impl<'a> Transaction<'a> {
       self.solid |= 0b10;
     }
     if branch_solid == 0b11 {
-      self.solid |= 0b01
+      self.solid |= 0b01;
     }
     let record = NewTransaction {
       hash: self.hash,
-      id_trunk: id_trunk,
-      id_branch: id_branch,
-      id_address: id_address,
-      id_bundle: id_bundle,
       tag: self.tag,
       value: self.value,
       timestamp: self.timestamp,
       current_idx: self.current_index,
       last_idx: self.last_index,
-      height: height,
       is_mst: self.is_milestone,
       mst_a: self.is_milestone,
       solid: self.solid,
+      id_trunk,
+      id_branch,
+      id_address,
+      id_bundle,
+      height,
     };
     if new_record {
       mapper.insert_transaction(counters, record)?;
@@ -208,14 +208,10 @@ impl<'a> Transaction<'a> {
         Ok((id_tx, record.height?, record.solid?))
       }
       None => {
-        let solid = if hash == NULL_HASH { 0b11 } else { 0b00 };
-        let height = 0;
-        Ok((
-          mapper
-            .insert_transaction_placeholder(counters, hash, height, solid)?,
-          height,
-          solid,
-        ))
+        let (height, solid) = (0, if hash == NULL_HASH { 0b11 } else { 0b00 });
+        let id_tx = mapper
+          .insert_transaction_placeholder(counters, hash, height, solid)?;
+        Ok((id_tx, height, solid))
       }
     }
   }
