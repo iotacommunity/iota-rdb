@@ -21,7 +21,7 @@ pub struct Transaction<'a> {
   trunk_hash: &'a str,
   branch_hash: &'a str,
   is_milestone: bool,
-  solid: bool,
+  solid: u8,
 }
 
 pub type ApproveIds = Option<Vec<u64>>;
@@ -45,7 +45,11 @@ impl<'a> Transaction<'a> {
     let trunk_hash = chunks[9];
     let branch_hash = chunks[10];
     let is_milestone = address_hash == milestone_address;
-    let solid = is_milestone && tag == milestone_start_index;
+    let solid = if is_milestone && tag == milestone_start_index {
+      0b11
+    } else {
+      0b00
+    };
     Ok(Self {
       hash,
       address_hash,
@@ -142,12 +146,12 @@ impl<'a> Transaction<'a> {
     let id_address = mapper.fetch_address(counters, self.address_hash)?;
     let id_bundle = mapper
       .fetch_bundle(counters, timestamp, self.bundle_hash, self.last_index)?;
-    let solid = if self.solid {
-      0b11
-    } else {
-      (if trunk_solid == 0b11 { 0b10 } else { 0b00 }) |
-        (if branch_solid == 0b11 { 0b01 } else { 0b00 })
-    };
+    if trunk_solid == 0b11 {
+      self.solid |= 0b10;
+    }
+    if branch_solid == 0b11 {
+      self.solid |= 0b01
+    }
     let record = NewTransaction {
       hash: self.hash,
       id_trunk: id_trunk,
@@ -161,14 +165,14 @@ impl<'a> Transaction<'a> {
       last_idx: self.last_index,
       is_mst: self.is_milestone,
       mst_a: self.is_milestone,
-      solid: solid,
+      solid: self.solid,
     };
     if new_record {
       mapper.insert_transaction(counters, record)?;
     } else {
       mapper.update_transaction(record)?;
     }
-    if solid != 0b11 {
+    if self.solid != 0b11 {
       mapper.unsolid_transaction_event(timestamp)?;
     }
     mapper.new_transaction_received_event(timestamp)?;
@@ -178,7 +182,7 @@ impl<'a> Transaction<'a> {
     } else {
       None
     };
-    let solid_hash = if self.solid && !new_record {
+    let solid_hash = if self.solid == 0b11 && !new_record {
       Some(self.hash.to_owned())
     } else {
       None
