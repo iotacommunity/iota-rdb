@@ -5,7 +5,7 @@ use std::thread;
 use transaction::Transaction;
 
 pub struct SolidatePool<'a> {
-  pub rx: mpsc::Receiver<String>,
+  pub rx: mpsc::Receiver<(String, i32)>,
   pub pool: &'a mysql::Pool,
 }
 
@@ -17,8 +17,8 @@ impl<'a> SolidatePool<'a> {
       let mut mapper = Mapper::new(self.pool).expect("MySQL mapper failure");
       thread::spawn(move || loop {
         let rx = rx.lock().expect("Mutex is poisoned");
-        let hash = rx.recv().expect("Thread communication failure");
-        match Transaction::solidate(&mut mapper, &hash) {
+        let (hash, height) = rx.recv().expect("Thread communication failure");
+        match Transaction::solidate(&mut mapper, &hash, height) {
           Ok(()) => {
             if verbose {
               println!("solidate_thread#{} {:?}", i, hash);

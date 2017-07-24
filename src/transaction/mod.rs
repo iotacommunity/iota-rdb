@@ -24,8 +24,8 @@ pub struct Transaction<'a> {
   solid: u8,
 }
 
-pub type ApproveIds = Option<Vec<u64>>;
-pub type SolidHash = Option<String>;
+pub type ApproveData = Option<Vec<u64>>;
+pub type SolidateData = Option<(String, i32)>;
 
 impl<'a> Transaction<'a> {
   pub fn parse(
@@ -95,13 +95,13 @@ impl<'a> Transaction<'a> {
     Ok(())
   }
 
-  pub fn solidate(mapper: &mut Mapper, hash: &str) -> Result<()> {
+  pub fn solidate(mapper: &mut Mapper, hash: &str, height: i32) -> Result<()> {
     let (timestamp, mut counter) = (utils::milliseconds_since_epoch()?, 0);
     let id = mapper
       .select_transaction_by_hash(hash)?
       .ok_or(mapper::Error::RecordNotFound)?
       .id_tx?;
-    let mut nodes = vec![(id, Some(0))];
+    let mut nodes = vec![(id, Some(height))];
     while let Some((parent_id, parent_height)) = nodes.pop() {
       let (mut trunk, mut branch) = (Vec::new(), Vec::new());
       for record in mapper.select_child_transactions(parent_id)? {
@@ -126,7 +126,7 @@ impl<'a> Transaction<'a> {
     &mut self,
     mapper: &mut Mapper,
     counters: &Counters,
-  ) -> Result<(ApproveIds, SolidHash)> {
+  ) -> Result<(ApproveData, SolidateData)> {
     let result = mapper.select_transaction_by_hash(self.hash)?;
     let new_record = if let Some(record) = result {
       if record.id_trunk.unwrap_or(0) != 0 &&
@@ -189,7 +189,7 @@ impl<'a> Transaction<'a> {
       None
     };
     let solid_hash = if self.solid == 0b11 && !new_record {
-      Some(self.hash.to_owned())
+      Some((self.hash.to_owned(), height))
     } else {
       None
     };

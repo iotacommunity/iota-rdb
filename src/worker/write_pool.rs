@@ -8,7 +8,7 @@ use transaction::Transaction;
 pub struct WritePool<'a> {
   pub rx: mpsc::Receiver<String>,
   pub approve_tx: &'a mpsc::Sender<Vec<u64>>,
-  pub solidate_tx: &'a mpsc::Sender<String>,
+  pub solidate_tx: &'a mpsc::Sender<(String, i32)>,
   pub pool: &'a mysql::Pool,
   pub counters: Arc<Counters>,
   pub milestone_address: &'a str,
@@ -35,18 +35,18 @@ impl<'a> WritePool<'a> {
         ) {
           Ok(mut transaction) => {
             match transaction.process(&mut mapper, &counters) {
-              Ok((approve_ids, solid_hash)) => {
+              Ok((approve_data, solidate_data)) => {
                 if verbose {
                   println!("write_thread#{} {:?}", i, transaction);
                 }
-                if let Some(approve_ids) = approve_ids {
+                if let Some(approve_data) = approve_data {
                   approve_tx
-                    .send(approve_ids)
+                    .send(approve_data)
                     .expect("Thread communication failure");
                 }
-                if let Some(solid_hash) = solid_hash {
+                if let Some(solidate_data) = solidate_data {
                   solidate_tx
-                    .send(solid_hash)
+                    .send(solidate_data)
                     .expect("Thread communication failure");
                 }
               }
