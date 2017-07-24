@@ -40,14 +40,14 @@ impl<'a> WritePool<'a> {
                   println!("write_thread#{} {:?}", i, transaction);
                 }
                 if let Some(approve_ids) = approve_ids {
-                  approve_tx.send(approve_ids).expect(
-                    "Thread communication failure",
-                  );
+                  approve_tx
+                    .send(approve_ids)
+                    .expect("Thread communication failure");
                 }
                 if let Some(solid_hash) = solid_hash {
-                  solidate_tx.send(solid_hash).expect(
-                    "Thread communication failure",
-                  );
+                  solidate_tx
+                    .send(solid_hash)
+                    .expect("Thread communication failure");
                 }
               }
               Err(err) => {

@@ -139,12 +139,8 @@ impl<'a> Transaction<'a> {
     let (id_branch, branch_solid) =
       Self::check_node(mapper, counters, self.branch_hash)?;
     let id_address = mapper.fetch_address(counters, self.address_hash)?;
-    let id_bundle = mapper.fetch_bundle(
-      counters,
-      timestamp,
-      self.bundle_hash,
-      self.last_index,
-    )?;
+    let id_bundle = mapper
+      .fetch_bundle(counters, timestamp, self.bundle_hash, self.last_index)?;
     let solid = if self.solid {
       0b11
     } else {
@@ -222,11 +218,8 @@ impl<'a> Transaction<'a> {
       match height {
         Some(height) => {
           node_height = height + 1;
-          mapper.solidate_trunk_transaction(
-            id,
-            node_height,
-            node_solid,
-          )?;
+          mapper
+            .solidate_trunk_transaction(id, node_height, node_solid)?;
         }
         None => {
           mapper.solidate_branch_transaction(id, node_solid)?;

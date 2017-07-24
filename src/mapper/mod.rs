@@ -155,9 +155,9 @@ impl<'a> Mapper<'a> {
     &mut self,
     hash: &str,
   ) -> Result<Option<TransactionByHash>> {
-    match self.select_transactions_by_hash.first_exec(params!{
-      "hash" => hash,
-    })? {
+    match self
+      .select_transactions_by_hash
+      .first_exec(params!{"hash" => hash})? {
       Some(mut row) => Ok(Some(TransactionByHash {
         id_tx: row.take_opt("id_tx").ok_or(Error::ColumnNotFound)?,
         id_trunk: row.take_opt("id_trunk").ok_or(Error::ColumnNotFound)?,
@@ -174,9 +174,7 @@ impl<'a> Mapper<'a> {
   ) -> Result<TransactionById> {
     let mut row = self
       .select_transactions_by_id
-      .first_exec(params!{
-        "id_tx" => id_tx,
-      })?
+      .first_exec(params!{"id_tx" => id_tx})?
       .ok_or(Error::RecordNotFound)?;
     Ok(TransactionById {
       mst_a: row.take_opt("mst_a").ok_or(Error::ColumnNotFound)?,
@@ -192,9 +190,9 @@ impl<'a> Mapper<'a> {
     id_tx: u64,
   ) -> Result<Vec<ChildTransaction>> {
     let mut records = Vec::new();
-    let results = self.select_child_transactions.execute(params!{
-      "id_tx" => id_tx,
-    })?;
+    let results = self
+      .select_child_transactions
+      .execute(params!{"id_tx" => id_tx})?;
     for row in results {
       let mut row = row?;
       records.push(ChildTransaction {
@@ -237,9 +235,9 @@ impl<'a> Mapper<'a> {
     &mut self,
     id: u64,
   ) -> Result<mysql::QueryResult> {
-    Ok(self.direct_approve_transaction.execute(params!{
-      "id_tx" => id,
-    })?)
+    Ok(self
+      .direct_approve_transaction
+      .execute(params!{"id_tx" => id})?)
   }
 
   pub fn solidate_branch_transaction(
@@ -284,12 +282,12 @@ impl<'a> Mapper<'a> {
     counters: &Counters,
     address: &str,
   ) -> Result<u64> {
-    match self.select_addresses.first_exec(params!{
-      "address" => address,
-    })? {
-      Some(mut result) => Ok(result.take_opt("id_address").ok_or(
-        Error::ColumnNotFound,
-      )??),
+    match self
+      .select_addresses
+      .first_exec(params!{"address" => address})? {
+      Some(mut result) => Ok(
+        result.take_opt("id_address").ok_or(Error::ColumnNotFound)??,
+      ),
       None => {
         let id_address = counters.next_address();
         self.insert_address.execute(params!{
@@ -308,12 +306,10 @@ impl<'a> Mapper<'a> {
     bundle: &str,
     size: i32,
   ) -> Result<u64> {
-    match self.select_bundles.first_exec(params!{
-      "bundle" => bundle,
-    })? {
-      Some(mut result) => Ok(result.take_opt("id_bundle").ok_or(
-        Error::ColumnNotFound,
-      )??),
+    match self.select_bundles.first_exec(params!{"bundle" => bundle})? {
+      Some(mut result) => Ok(
+        result.take_opt("id_bundle").ok_or(Error::ColumnNotFound)??,
+      ),
       None => {
         let id_bundle = counters.next_bundle();
         self.insert_bundle.execute(params!{

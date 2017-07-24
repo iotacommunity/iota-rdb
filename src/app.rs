@@ -68,7 +68,10 @@ pub fn build<'a, 'b>() -> App<'a, 'b> {
         .default_value(DEFAULT_MILESTONE_START_INDEX)
         .help("Milestone start index"),
     )
-    .arg(Arg::with_name("VERBOSE").short("v").long("verbose").help(
-      "Prints flowing messages",
-    ))
+    .arg(
+      Arg::with_name("VERBOSE")
+        .short("v")
+        .long("verbose")
+        .help("Prints flowing messages"),
+    )
 }

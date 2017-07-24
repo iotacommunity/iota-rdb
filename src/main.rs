@@ -52,9 +52,9 @@ fn main() {
     println!("Highest ids: {}", counters);
   }
 
-  socket.connect(args.zmq_uri()).expect(
-    "ZMQ socket connect failure",
-  );
+  socket
+    .connect(args.zmq_uri())
+    .expect("ZMQ socket connect failure");
   socket.set_subscribe(b"tx ").expect("ZMQ subscribe failure");
   WritePool {
     rx: write_rx,
@@ -68,10 +68,7 @@ fn main() {
   ApprovePool {
     rx: approve_rx,
     pool: &pool,
-  }.run(
-    args.approve_threads_count(),
-    args.verbose(),
-  );
+  }.run(args.approve_threads_count(), args.verbose());
   SolidatePool {
     rx: solidate_rx,
     pool: &pool,

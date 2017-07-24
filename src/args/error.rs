@@ -49,8 +49,7 @@ impl error::Error for Error {
 
   fn cause(&self) -> Option<&error::Error> {
     match *self {
-      Error::ArgNotFound |
-      Error::MilestoneStartIndexToTrits => None,
+      Error::ArgNotFound | Error::MilestoneStartIndexToTrits => None,
       Error::WriteThreadsParseInt(ref err) |
       Error::ApproveThreadsParseInt(ref err) |
       Error::SolidateThreadsParseInt(ref err) |

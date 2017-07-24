@@ -39,15 +39,14 @@ impl<'a> Args<'a> {
       .ok_or(Error::ArgNotFound)?
       .parse()
       .map_err(Error::SolidateThreadsParseInt)?;
-    let milestone_address = matches.value_of("milestone_address").ok_or(
-      Error::ArgNotFound,
-    )?;
-    let milestone_start_index =
-      Self::convert_trits(matches
-        .value_of("milestone_start_index")
-        .ok_or(Error::ArgNotFound)?
-        .parse()
-        .map_err(Error::MilestoneStartIndexParseInt)?)?;
+    let milestone_address = matches
+      .value_of("milestone_address")
+      .ok_or(Error::ArgNotFound)?;
+    let milestone_start_index = Self::convert_trits(matches
+      .value_of("milestone_start_index")
+      .ok_or(Error::ArgNotFound)?
+      .parse()
+      .map_err(Error::MilestoneStartIndexParseInt)?)?;
     let verbose = matches.is_present("VERBOSE");
 
     Ok(Self {
@@ -99,8 +98,7 @@ impl<'a> Args<'a> {
     while trits.len() < MILESTONE_START_INDEX_TRITS as usize {
       trits.push(0);
     }
-    Ok(trits_to_string(&trits).ok_or(
-      Error::MilestoneStartIndexToTrits,
-    )?)
+    Ok(trits_to_string(&trits)
+      .ok_or(Error::MilestoneStartIndexToTrits)?)
   }
 }
