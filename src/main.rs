@@ -24,6 +24,9 @@ use std::process::exit;
 use std::sync::{Arc, mpsc};
 use worker::{ApprovePool, SolidatePool, WritePool, ZmqReader};
 
+const MYSQL_MIN_POOL_SIZE: usize = 10;
+const MYSQL_MAX_POOL_SIZE: usize = 1024;
+
 fn main() {
   let matches = app::build().get_matches();
   let args = Args::parse(&matches).unwrap_or_else(|err| {
@@ -39,7 +42,11 @@ fn main() {
     );
   }
 
-  let pool = mysql::Pool::new(args.mysql_uri()).expect("MySQL connect failure");
+  let pool = mysql::Pool::new_manual(
+    MYSQL_MIN_POOL_SIZE,
+    MYSQL_MAX_POOL_SIZE,
+    args.mysql_uri(),
+  ).expect("MySQL connect failure");
   let counters =
     Arc::new(Counters::new(&pool).expect("MySQL counters failure"));
   let ctx = zmq::Context::new();

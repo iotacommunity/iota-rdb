@@ -67,7 +67,8 @@ $ iota-rdb \
     --zmq 'tcp://127.0.0.1:5556' \
     --mysql 'mysql://root:password@127.0.0.1:3306/iota' \
     --write-threads 4 \
-    --approve-threads 4
+    --approve-threads 4 \
+    --solidate-threads 4
 ```
 
 You can view available options by running with `--help` argument:
