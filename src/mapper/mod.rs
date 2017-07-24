@@ -55,7 +55,7 @@ impl<'a> Mapper<'a> {
           INSERT INTO tx (
             id_tx, hash, da, solid
           ) VALUES (
-            :id_tx, :hash, 1, solid
+            :id_tx, :hash, 1, :solid
           )
         "#,
       )?,
