@@ -139,13 +139,18 @@ impl<'a> Transaction<'a> {
       true
     };
     let timestamp = utils::milliseconds_since_epoch()?;
-    let (id_trunk, trunk_solid) =
+    let (id_trunk, trunk_height, trunk_solid) =
       Self::check_node(mapper, counters, self.trunk_hash)?;
-    let (id_branch, branch_solid) =
+    let (id_branch, _, branch_solid) =
       Self::check_node(mapper, counters, self.branch_hash)?;
     let id_address = mapper.fetch_address(counters, self.address_hash)?;
     let id_bundle = mapper
       .fetch_bundle(counters, timestamp, self.bundle_hash, self.last_index)?;
+    let height = if self.solid != 0b11 && trunk_solid == 0b11 {
+      trunk_height + 1
+    } else {
+      0
+    };
     if trunk_solid == 0b11 {
       self.solid |= 0b10;
     }
@@ -163,6 +168,7 @@ impl<'a> Transaction<'a> {
       timestamp: self.timestamp,
       current_idx: self.current_index,
       last_idx: self.last_index,
+      height: height,
       is_mst: self.is_milestone,
       mst_a: self.is_milestone,
       solid: self.solid,
@@ -194,18 +200,20 @@ impl<'a> Transaction<'a> {
     mapper: &mut Mapper,
     counters: &Counters,
     hash: &str,
-  ) -> Result<(u64, u8)> {
+  ) -> Result<(u64, i32, u8)> {
     match mapper.select_transaction_by_hash(hash)? {
       Some(record) => {
         let id_tx = record.id_tx?;
         mapper.direct_approve_transaction(id_tx)?;
-        Ok((id_tx, record.solid?))
+        Ok((id_tx, record.height?, record.solid?))
       }
       None => {
         let solid = if hash == NULL_HASH { 0b11 } else { 0b00 };
+        let height = 0;
         Ok((
           mapper
-            .insert_transaction_placeholder(counters, hash, solid)?,
+            .insert_transaction_placeholder(counters, hash, height, solid)?,
+          height,
           solid,
         ))
       }

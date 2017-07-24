@@ -2,8 +2,7 @@ mod error;
 mod records;
 
 pub use self::error::{Error, Result};
-pub use self::records::{ChildTransaction, NewTransaction, TransactionByHash,
-                        TransactionById};
+pub use self::records::{NewTransaction, ReferencedTransaction, TransactionById};
 use counters::Counters;
 use mysql;
 
@@ -31,7 +30,10 @@ impl<'a> Mapper<'a> {
     Ok(Self {
       select_transactions_by_hash: pool.prepare(
         r#"
-          SELECT id_tx, id_trunk, id_branch, solid FROM tx WHERE hash = :hash
+          SELECT
+            id_tx, id_trunk, id_branch, height, solid
+          FROM tx
+          WHERE hash = :hash
         "#,
       )?,
       select_transactions_by_id: pool.prepare(
@@ -53,9 +55,9 @@ impl<'a> Mapper<'a> {
       insert_transaction_placeholder: pool.prepare(
         r#"
           INSERT INTO tx (
-            id_tx, hash, da, solid
+            id_tx, hash, da, height, solid
           ) VALUES (
-            :id_tx, :hash, 1, :solid
+            :id_tx, :hash, 1, :height, :solid
           )
         "#,
       )?,
@@ -158,14 +160,15 @@ impl<'a> Mapper<'a> {
   pub fn select_transaction_by_hash(
     &mut self,
     hash: &str,
-  ) -> Result<Option<TransactionByHash>> {
+  ) -> Result<Option<ReferencedTransaction>> {
     match self
       .select_transactions_by_hash
       .first_exec(params!{"hash" => hash})? {
-      Some(mut row) => Ok(Some(TransactionByHash {
+      Some(mut row) => Ok(Some(ReferencedTransaction {
         id_tx: row.take_opt("id_tx").ok_or(Error::ColumnNotFound)?,
         id_trunk: row.take_opt("id_trunk").ok_or(Error::ColumnNotFound)?,
         id_branch: row.take_opt("id_branch").ok_or(Error::ColumnNotFound)?,
+        height: row.take_opt("height").ok_or(Error::ColumnNotFound)?,
         solid: row.take_opt("solid").ok_or(Error::ColumnNotFound)?,
       })),
       None => Ok(None),
@@ -192,14 +195,14 @@ impl<'a> Mapper<'a> {
   pub fn select_child_transactions(
     &mut self,
     id_tx: u64,
-  ) -> Result<Vec<ChildTransaction>> {
+  ) -> Result<Vec<ReferencedTransaction>> {
     let mut records = Vec::new();
     let results = self
       .select_child_transactions
       .execute(params!{"id_tx" => id_tx})?;
     for row in results {
       let mut row = row?;
-      records.push(ChildTransaction {
+      records.push(ReferencedTransaction {
         id_tx: row.take_opt("id_tx").ok_or(Error::ColumnNotFound)?,
         id_trunk: row.take_opt("id_trunk").ok_or(Error::ColumnNotFound)?,
         id_branch: row.take_opt("id_branch").ok_or(Error::ColumnNotFound)?,
@@ -272,12 +275,14 @@ impl<'a> Mapper<'a> {
     &mut self,
     counters: &Counters,
     hash: &str,
+    height: i32,
     solid: u8,
   ) -> Result<u64> {
     let id_tx = counters.next_transaction();
     self.insert_transaction_placeholder.execute(params!{
       "id_tx" => id_tx,
       "hash" => hash,
+      "height" => height,
       "solid" => solid,
     })?;
     Ok(id_tx)
