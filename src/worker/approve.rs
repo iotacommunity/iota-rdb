@@ -24,6 +24,7 @@ impl<'a> Approve<'a> {
 
   pub fn perform(&mut self, mut nodes: ApproveVec) -> Result<()> {
     let (timestamp, mut counter) = (utils::milliseconds_since_epoch()?, 0);
+    nodes.dedup();
     while let Some(id) = nodes.pop() {
       let record = self.find_transaction_query.exec(id)?;
       if record.mst_a {

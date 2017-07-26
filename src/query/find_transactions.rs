@@ -5,6 +5,7 @@ pub struct FindTransactions<'a> {
   stmt: mysql::Stmt<'a>,
 }
 
+#[derive(Clone)]
 pub struct FindTransactionsResult {
   pub id_tx: u64,
   pub id_trunk: u64,

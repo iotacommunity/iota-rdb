@@ -51,7 +51,11 @@ impl<'a> Write<'a> {
     }
     let timestamp = utils::milliseconds_since_epoch()?;
     let trunk_tx = self.check_parent(trunk_tx, transaction.trunk_hash())?;
-    let branch_tx = self.check_parent(branch_tx, transaction.branch_hash())?;
+    let branch_tx = if transaction.branch_hash() != transaction.trunk_hash() {
+      self.check_parent(branch_tx, transaction.branch_hash())?
+    } else {
+      trunk_tx.clone()
+    };
     let id_address = self.fetch_address_query.exec(transaction.address_hash())?;
     let id_bundle = self.fetch_bundle_query.exec(
       timestamp,
