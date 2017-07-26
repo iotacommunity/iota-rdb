@@ -26,11 +26,11 @@ pub struct ReferencedTransaction {
 }
 
 pub struct TransactionById {
-  pub mst_a: mysql::Result<bool>,
   pub id_trunk: mysql::Result<u64>,
   pub id_branch: mysql::Result<u64>,
   pub id_bundle: mysql::Result<u64>,
   pub current_idx: mysql::Result<i32>,
+  pub mst_a: mysql::Result<bool>,
 }
 
 impl<'a> NewTransaction<'a> {

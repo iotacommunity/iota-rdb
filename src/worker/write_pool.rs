@@ -3,12 +3,12 @@ use mapper::Mapper;
 use mysql;
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
-use transaction::Transaction;
+use transaction::{ApproveVec, SolidateVec, Transaction};
 
 pub struct WritePool<'a> {
   pub rx: mpsc::Receiver<String>,
-  pub approve_tx: &'a mpsc::Sender<Vec<u64>>,
-  pub solidate_tx: &'a mpsc::Sender<(String, i32)>,
+  pub approve_tx: &'a mpsc::Sender<ApproveVec>,
+  pub solidate_tx: &'a mpsc::Sender<SolidateVec>,
   pub pool: &'a mysql::Pool,
   pub counters: Arc<Counters>,
   pub milestone_address: &'a str,

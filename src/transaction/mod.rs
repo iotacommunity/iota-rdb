@@ -2,7 +2,7 @@ mod error;
 
 pub use self::error::{Error, Result};
 use counters::Counters;
-use mapper::{self, Mapper, NewTransaction};
+use mapper::{Mapper, NewTransaction};
 use utils;
 
 pub const TAG_LENGTH: usize = 27;
@@ -24,8 +24,8 @@ pub struct Transaction<'a> {
   solid: u8,
 }
 
-pub type ApproveData = Option<Vec<u64>>;
-pub type SolidateData = Option<(String, i32)>;
+pub type ApproveVec = Vec<u64>;
+pub type SolidateVec = Vec<(u64, Option<i32>)>;
 
 impl<'a> Transaction<'a> {
   pub fn parse(
@@ -66,9 +66,9 @@ impl<'a> Transaction<'a> {
     })
   }
 
-  pub fn approve(mapper: &mut Mapper, mut ids: Vec<u64>) -> Result<()> {
+  pub fn approve(mapper: &mut Mapper, mut nodes: ApproveVec) -> Result<()> {
     let (timestamp, mut counter) = (utils::milliseconds_since_epoch()?, 0);
-    while let Some(id) = ids.pop() {
+    while let Some(id) = nodes.pop() {
       let record = mapper.select_transaction_by_id(id)?;
       if record.mst_a.unwrap_or(false) {
         continue;
@@ -76,10 +76,10 @@ impl<'a> Transaction<'a> {
       let id_trunk = record.id_trunk.unwrap_or(0);
       let id_branch = record.id_branch.unwrap_or(0);
       if id_trunk != 0 {
-        ids.push(id_trunk);
+        nodes.push(id_trunk);
       }
       if id_branch != 0 {
-        ids.push(id_branch);
+        nodes.push(id_branch);
       }
       if let Ok(0) = record.current_idx {
         if let Ok(id_bundle) = record.id_bundle {
@@ -95,13 +95,8 @@ impl<'a> Transaction<'a> {
     Ok(())
   }
 
-  pub fn solidate(mapper: &mut Mapper, hash: &str, height: i32) -> Result<()> {
+  pub fn solidate(mapper: &mut Mapper, mut nodes: SolidateVec) -> Result<()> {
     let (timestamp, mut counter) = (utils::milliseconds_since_epoch()?, 0);
-    let id = mapper
-      .select_transaction_by_hash(hash)?
-      .ok_or(mapper::Error::RecordNotFound)?
-      .id_tx?;
-    let mut nodes = vec![(id, Some(height))];
     while let Some((parent_id, parent_height)) = nodes.pop() {
       let (mut trunk, mut branch) = (Vec::new(), Vec::new());
       for record in mapper.select_child_transactions(parent_id)? {
@@ -126,17 +121,17 @@ impl<'a> Transaction<'a> {
     &mut self,
     mapper: &mut Mapper,
     counters: &Counters,
-  ) -> Result<(ApproveData, SolidateData)> {
+  ) -> Result<(Option<ApproveVec>, Option<SolidateVec>)> {
     let result = mapper.select_transaction_by_hash(self.hash)?;
-    let new_record = if let Some(record) = result {
+    let id_tx = if let Some(record) = result {
       if record.id_trunk.unwrap_or(0) != 0 &&
         record.id_branch.unwrap_or(0) != 0
       {
         return Ok((None, None));
       }
-      false
+      Some(record.id_tx?)
     } else {
-      true
+      None
     };
     let timestamp = utils::milliseconds_since_epoch()?;
     let (id_trunk, trunk_height, trunk_solid) =
@@ -173,7 +168,7 @@ impl<'a> Transaction<'a> {
       id_bundle,
       height,
     };
-    if new_record {
+    if id_tx.is_none() {
       mapper.insert_transaction(counters, record)?;
     } else {
       mapper.update_transaction(record)?;
@@ -182,18 +177,18 @@ impl<'a> Transaction<'a> {
       mapper.unsolid_transaction_event(timestamp)?;
     }
     mapper.new_transaction_received_event(timestamp)?;
-    let approve_ids = if self.is_milestone {
+    let approve_data = if self.is_milestone {
       mapper.milestone_received_event(timestamp)?;
       Some(vec![id_trunk, id_branch])
     } else {
       None
     };
-    let solid_hash = if self.solid == 0b11 && !new_record {
-      Some((self.hash.to_owned(), height))
+    let solidate_data = id_tx.and_then(|id_tx| if self.solid == 0b11 {
+      Some(vec![(id_tx, Some(height))])
     } else {
       None
-    };
-    Ok((approve_ids, solid_hash))
+    });
+    Ok((approve_data, solidate_data))
   }
 
   fn check_node(
@@ -218,7 +213,7 @@ impl<'a> Transaction<'a> {
 
   fn solidate_nodes(
     mapper: &mut Mapper,
-    nodes: &mut Vec<(u64, Option<i32>)>,
+    nodes: &mut SolidateVec,
     ids: &[(u64, i32, u8)],
     solid: u8,
     height: Option<i32>,

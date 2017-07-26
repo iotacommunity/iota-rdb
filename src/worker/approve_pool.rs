@@ -2,10 +2,10 @@ use mapper::Mapper;
 use mysql;
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
-use transaction::Transaction;
+use transaction::{ApproveVec, Transaction};
 
 pub struct ApprovePool<'a> {
-  pub rx: mpsc::Receiver<Vec<u64>>,
+  pub rx: mpsc::Receiver<ApproveVec>,
   pub pool: &'a mysql::Pool,
 }
 

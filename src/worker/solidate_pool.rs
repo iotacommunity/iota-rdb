@@ -2,10 +2,10 @@ use mapper::Mapper;
 use mysql;
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
-use transaction::Transaction;
+use transaction::{SolidateVec, Transaction};
 
 pub struct SolidatePool<'a> {
-  pub rx: mpsc::Receiver<(String, i32)>,
+  pub rx: mpsc::Receiver<SolidateVec>,
   pub pool: &'a mysql::Pool,
 }
 
@@ -17,11 +17,11 @@ impl<'a> SolidatePool<'a> {
       let mut mapper = Mapper::new(self.pool).expect("MySQL mapper failure");
       thread::spawn(move || loop {
         let rx = rx.lock().expect("Mutex is poisoned");
-        let (hash, height) = rx.recv().expect("Thread communication failure");
-        match Transaction::solidate(&mut mapper, &hash, height) {
+        let vec = rx.recv().expect("Thread communication failure");
+        match Transaction::solidate(&mut mapper, vec.clone()) {
           Ok(()) => {
             if verbose {
-              println!("solidate_thread#{} {:?}", i, hash);
+              println!("solidate_thread#{} {:?}", i, vec);
             }
           }
           Err(err) => {
