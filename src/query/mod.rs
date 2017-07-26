@@ -17,7 +17,8 @@ pub use self::direct_approve_transaction::DirectApproveTransaction;
 pub use self::error::{Error, Result};
 pub use self::fetch_address::FetchAddress;
 pub use self::fetch_bundle::FetchBundle;
-pub use self::find_child_transactions::FindChildTransactions;
+pub use self::find_child_transactions::{FindChildTransactions,
+                                        FindChildTransactionsResult};
 pub use self::find_transaction::FindTransaction;
 pub use self::find_transactions::{FindTransactions, FindTransactionsResult};
 pub use self::insert_event::InsertEvent;

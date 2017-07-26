@@ -1,5 +1,6 @@
 use mysql;
-use query::{FindChildTransactions, InsertEvent, SolidateTransaction};
+use query::{FindChildTransactions, FindChildTransactionsResult, InsertEvent,
+            SolidateTransaction};
 use utils;
 use worker::Result;
 
@@ -22,18 +23,17 @@ impl<'a> Solidate<'a> {
 
   pub fn perform(&mut self, mut nodes: SolidateVec) -> Result<()> {
     let (timestamp, mut counter) = (utils::milliseconds_since_epoch()?, 0);
-    while let Some((parent_id, parent_height)) = nodes.pop() {
+    while let Some((id, height)) = nodes.pop() {
       let (mut trunk, mut branch) = (Vec::new(), Vec::new());
-      for record in self.find_child_transactions_query.exec(parent_id)? {
-        if record.id_trunk == parent_id {
-          trunk.push((record.id_tx, record.height, record.solid));
-        } else if record.id_branch == parent_id {
-          branch.push((record.id_tx, record.height, record.solid));
+      for record in self.find_child_transactions_query.exec(id)? {
+        if record.id_trunk == id {
+          trunk.push(record);
+        } else if record.id_branch == id {
+          branch.push(record);
         }
       }
-      self
-        .solidate_nodes(&mut nodes, &trunk, 0b10, parent_height)?;
-      self.solidate_nodes(&mut nodes, &branch, 0b01, None)?;
+      self.check_nodes(&mut nodes, &mut trunk, height, 0b10)?;
+      self.check_nodes(&mut nodes, &mut branch, None, 0b01)?;
       counter += trunk.len() as i32;
       counter += branch.len() as i32;
     }
@@ -45,36 +45,38 @@ impl<'a> Solidate<'a> {
     Ok(())
   }
 
-  fn solidate_nodes(
+  fn check_nodes(
     &mut self,
     nodes: &mut SolidateVec,
-    ids: &[(u64, i32, u8)],
-    solid: u8,
+    children: &mut [FindChildTransactionsResult],
     height: Option<i32>,
+    solid: u8,
   ) -> Result<()> {
-    for &(id, mut node_height, mut node_solid) in ids {
-      if node_solid & solid != 0b00 {
+    for record in children {
+      if record.solid & solid != 0b00 {
         continue;
       }
-      node_solid |= solid;
+      record.solid |= solid;
       match height {
         Some(height) => {
-          node_height = height + 1;
+          record.height = height + 1;
           self
             .solidate_transaction_query
-            .trunk(id, node_height, node_solid)?;
+            .trunk(record.id_tx, record.height, record.solid)?;
         }
         None => {
-          self.solidate_transaction_query.branch(id, node_solid)?;
+          self
+            .solidate_transaction_query
+            .branch(record.id_tx, record.solid)?;
         }
       }
-      if node_solid == 0b11 {
-        let node_height = if node_height > 0 {
-          Some(node_height)
+      if record.solid == 0b11 {
+        let height = if record.height > 0 {
+          Some(record.height)
         } else {
           None
         };
-        nodes.push((id, node_height));
+        nodes.push((record.id_tx, height));
       }
     }
     Ok(())
