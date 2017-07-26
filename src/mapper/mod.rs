@@ -7,7 +7,6 @@ use counters::Counters;
 use mysql;
 
 pub struct Mapper<'a> {
-  select_transactions_by_hash: mysql::Stmt<'a>,
   select_transactions_by_id: mysql::Stmt<'a>,
   select_child_transactions: mysql::Stmt<'a>,
   insert_transaction: mysql::Stmt<'a>,
@@ -28,14 +27,6 @@ pub struct Mapper<'a> {
 impl<'a> Mapper<'a> {
   pub fn new(pool: &mysql::Pool) -> Result<Self> {
     Ok(Self {
-      select_transactions_by_hash: pool.prepare(
-        r#"
-          SELECT
-            id_tx, id_trunk, id_branch, height, solid
-          FROM tx
-          WHERE hash = :hash
-        "#,
-      )?,
       select_transactions_by_id: pool.prepare(
         r#"
           SELECT
@@ -157,24 +148,6 @@ impl<'a> Mapper<'a> {
         "#,
       )?,
     })
-  }
-
-  pub fn select_transaction_by_hash(
-    &mut self,
-    hash: &str,
-  ) -> Result<Option<ReferencedTransaction>> {
-    match self
-      .select_transactions_by_hash
-      .first_exec(params!{"hash" => hash})? {
-      Some(mut row) => Ok(Some(ReferencedTransaction {
-        id_tx: row.take_opt("id_tx").ok_or(Error::ColumnNotFound)?,
-        id_trunk: row.take_opt("id_trunk").ok_or(Error::ColumnNotFound)?,
-        id_branch: row.take_opt("id_branch").ok_or(Error::ColumnNotFound)?,
-        height: row.take_opt("height").ok_or(Error::ColumnNotFound)?,
-        solid: row.take_opt("solid").ok_or(Error::ColumnNotFound)?,
-      })),
-      None => Ok(None),
-    }
   }
 
   pub fn select_transaction_by_id(

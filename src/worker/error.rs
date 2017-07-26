@@ -1,5 +1,6 @@
 use mapper;
 use mysql;
+use query;
 use std::{error, fmt, result, time};
 use transaction;
 
@@ -7,6 +8,7 @@ use transaction;
 pub enum Error {
   Transaction(transaction::Error),
   Mapper(mapper::Error),
+  Query(query::Error),
   SystemTime(time::SystemTimeError),
 }
 
@@ -17,6 +19,7 @@ impl fmt::Display for Error {
     match *self {
       Error::Transaction(ref err) => write!(f, "Transaction error: {}", err),
       Error::Mapper(ref err) => write!(f, "Mapper error: {}", err),
+      Error::Query(ref err) => write!(f, "Query error: {}", err),
       Error::SystemTime(ref err) => write!(f, "SystemTime error: {}", err),
     }
   }
@@ -27,6 +30,7 @@ impl error::Error for Error {
     match *self {
       Error::Transaction(ref err) => err.description(),
       Error::Mapper(ref err) => err.description(),
+      Error::Query(ref err) => err.description(),
       Error::SystemTime(ref err) => err.description(),
     }
   }
@@ -35,6 +39,7 @@ impl error::Error for Error {
     match *self {
       Error::Transaction(ref err) => Some(err),
       Error::Mapper(ref err) => Some(err),
+      Error::Query(ref err) => Some(err),
       Error::SystemTime(ref err) => Some(err),
     }
   }
@@ -43,6 +48,12 @@ impl error::Error for Error {
 impl From<mapper::Error> for Error {
   fn from(err: mapper::Error) -> Error {
     Error::Mapper(err)
+  }
+}
+
+impl From<query::Error> for Error {
+  fn from(err: query::Error) -> Error {
+    Error::Query(err)
   }
 }
 
@@ -60,6 +71,6 @@ impl From<time::SystemTimeError> for Error {
 
 impl From<mysql::Error> for Error {
   fn from(err: mysql::Error) -> Error {
-    Error::Mapper(mapper::Error::from(err))
+    Error::Query(query::Error::from(err))
   }
 }

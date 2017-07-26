@@ -1,5 +1,7 @@
+use mapper::Mapper;
 use mysql;
 use std::sync::{Arc, Mutex, mpsc};
+use std::thread;
 use worker::{Solidate, SolidateVec};
 
 pub struct SolidatePool<'a> {
@@ -10,10 +12,27 @@ pub struct SolidatePool<'a> {
 impl<'a> SolidatePool<'a> {
   pub fn run(self, threads_count: usize, verbose: bool) {
     let solidate_rx = Arc::new(Mutex::new(self.solidate_rx));
-    for thread_number in 0..threads_count {
-      Solidate {
-        solidate_rx: solidate_rx.clone(),
-      }.spawn(self.pool, thread_number, verbose)
+    for i in 0..threads_count {
+      let solidate_rx = solidate_rx.clone();
+      let mapper = Mapper::new(self.pool).expect("MySQL mapper failure");
+      let mut worker = Solidate::new(mapper);
+      thread::spawn(move || loop {
+        let vec = solidate_rx
+          .lock()
+          .expect("Mutex is poisoned")
+          .recv()
+          .expect("Thread communication failure");
+        match worker.perform(vec.clone()) {
+          Ok(()) => {
+            if verbose {
+              println!("solidate_thread#{} {:?}", i, vec);
+            }
+          }
+          Err(err) => {
+            eprintln!("Transaction solidity check error: {}", err);
+          }
+        }
+      });
     }
   }
 }
