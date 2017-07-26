@@ -83,5 +83,5 @@ fn main() {
   ZmqReader {
     socket: &socket,
     tx: &write_tx,
-  }.run();
+  }.run(args.verbose());
 }
