@@ -1,16 +1,16 @@
 use mysql;
-use query::{Error, Result};
+use query::Result;
 
 pub struct FindChildTransactions<'a> {
   stmt: mysql::Stmt<'a>,
 }
 
 pub struct FindChildTransactionsResult {
-  pub id_tx: mysql::Result<u64>,
-  pub id_trunk: mysql::Result<u64>,
-  pub id_branch: mysql::Result<u64>,
-  pub height: mysql::Result<i32>,
-  pub solid: mysql::Result<u8>,
+  pub id_tx: u64,
+  pub id_trunk: u64,
+  pub id_branch: u64,
+  pub height: i32,
+  pub solid: u8,
 }
 
 impl<'a> FindChildTransactions<'a> {
@@ -34,13 +34,20 @@ impl<'a> FindChildTransactions<'a> {
     let mut records = Vec::new();
     let results = self.stmt.execute(params!{"id_tx" => id_tx})?;
     for row in results {
-      let mut row = row?;
+      let row = row?;
+      let (id_tx, id_trunk, id_branch, height, solid): (
+        u64,
+        Option<u64>,
+        Option<u64>,
+        Option<i32>,
+        Option<u8>,
+      ) = mysql::from_row_opt(row)?;
       records.push(FindChildTransactionsResult {
-        id_tx: row.take_opt("id_tx").ok_or(Error::ColumnNotFound)?,
-        id_trunk: row.take_opt("id_trunk").ok_or(Error::ColumnNotFound)?,
-        id_branch: row.take_opt("id_branch").ok_or(Error::ColumnNotFound)?,
-        height: row.take_opt("height").ok_or(Error::ColumnNotFound)?,
-        solid: row.take_opt("solid").ok_or(Error::ColumnNotFound)?,
+        id_tx,
+        id_trunk: id_trunk.unwrap_or(0),
+        id_branch: id_branch.unwrap_or(0),
+        height: height.unwrap_or(0),
+        solid: solid.unwrap_or(0b00),
       });
     }
     Ok(records)

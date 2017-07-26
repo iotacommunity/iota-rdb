@@ -25,10 +25,10 @@ impl<'a> Solidate<'a> {
     while let Some((parent_id, parent_height)) = nodes.pop() {
       let (mut trunk, mut branch) = (Vec::new(), Vec::new());
       for record in self.find_child_transactions_query.exec(parent_id)? {
-        if record.id_trunk? == parent_id {
-          trunk.push((record.id_tx?, record.height?, record.solid?));
-        } else if record.id_branch? == parent_id {
-          branch.push((record.id_tx?, record.height?, record.solid?));
+        if record.id_trunk == parent_id {
+          trunk.push((record.id_tx, record.height, record.solid));
+        } else if record.id_branch == parent_id {
+          branch.push((record.id_tx, record.height, record.solid));
         }
       }
       self

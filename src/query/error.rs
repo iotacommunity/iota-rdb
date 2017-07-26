@@ -5,7 +5,6 @@ use std::{error, fmt, result};
 pub enum Error {
   Mysql(mysql::Error),
   RecordNotFound,
-  ColumnNotFound,
 }
 
 pub type Result<T> = result::Result<T, Error>;
@@ -15,7 +14,6 @@ impl fmt::Display for Error {
     match *self {
       Error::Mysql(ref err) => write!(f, "Mysql error: {}", err),
       Error::RecordNotFound => write!(f, "Record not found"),
-      Error::ColumnNotFound => write!(f, "Column not found"),
     }
   }
 }
@@ -25,14 +23,13 @@ impl error::Error for Error {
     match *self {
       Error::Mysql(ref err) => err.description(),
       Error::RecordNotFound => "Record not found",
-      Error::ColumnNotFound => "Column not found",
     }
   }
 
   fn cause(&self) -> Option<&error::Error> {
     match *self {
       Error::Mysql(ref err) => Some(err),
-      Error::RecordNotFound | Error::ColumnNotFound => None,
+      Error::RecordNotFound => None,
     }
   }
 }

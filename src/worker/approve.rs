@@ -26,19 +26,17 @@ impl<'a> Approve<'a> {
     let (timestamp, mut counter) = (utils::milliseconds_since_epoch()?, 0);
     while let Some(id) = nodes.pop() {
       let record = self.find_transaction_query.exec(id)?;
-      if record.mst_a.unwrap_or(false) {
+      if record.mst_a {
         continue;
       }
-      let id_trunk = record.id_trunk.unwrap_or(0);
-      let id_branch = record.id_branch.unwrap_or(0);
-      if id_trunk != 0 {
-        nodes.push(id_trunk);
+      if record.id_trunk != 0 {
+        nodes.push(record.id_trunk);
       }
-      if id_branch != 0 {
-        nodes.push(id_branch);
+      if record.id_branch != 0 {
+        nodes.push(record.id_branch);
       }
-      if let Ok(0) = record.current_idx {
-        if let Ok(id_bundle) = record.id_bundle {
+      if let Some(0) = record.current_idx {
+        if let Some(id_bundle) = record.id_bundle {
           self.update_bundle_query.exec(id_bundle, timestamp)?;
         }
       }
