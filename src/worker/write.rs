@@ -1,8 +1,9 @@
 use counters::Counters;
 use mysql;
 use query::{DirectApproveTransaction, FetchAddress, FetchBundle,
-            FindTransactionByHash, InsertEvent, InsertTransactionPlaceholder,
-            UpsertTransaction, UpsertTransactionRecord};
+            FindTransactions, FindTransactionsResult, InsertEvent,
+            InsertTransactionPlaceholder, UpsertTransaction,
+            UpsertTransactionRecord};
 use std::sync::Arc;
 use transaction::Transaction;
 use utils;
@@ -11,8 +12,7 @@ use worker::{ApproveVec, Result, SolidateVec};
 const NULL_HASH: &str = "999999999999999999999999999999999999999999999999999999999999999999999999999999999";
 
 pub struct Write<'a> {
-  counters: Arc<Counters>,
-  find_transaction_by_hash_query: FindTransactionByHash<'a>,
+  find_transactions_query: FindTransactions<'a>,
   upsert_transaction_query: UpsertTransaction<'a>,
   insert_transaction_placeholder_query: InsertTransactionPlaceholder<'a>,
   direct_approve_transaction_query: DirectApproveTransaction<'a>,
@@ -24,15 +24,14 @@ pub struct Write<'a> {
 impl<'a> Write<'a> {
   pub fn new(pool: &mysql::Pool, counters: Arc<Counters>) -> Result<Self> {
     Ok(Self {
-      find_transaction_by_hash_query: FindTransactionByHash::new(pool)?,
-      upsert_transaction_query: UpsertTransaction::new(pool)?,
+      find_transactions_query: FindTransactions::new(pool)?,
+      upsert_transaction_query: UpsertTransaction::new(pool, counters.clone())?,
       insert_transaction_placeholder_query:
-        InsertTransactionPlaceholder::new(pool)?,
+        InsertTransactionPlaceholder::new(pool, counters.clone())?,
       direct_approve_transaction_query: DirectApproveTransaction::new(pool)?,
-      fetch_address_query: FetchAddress::new(pool)?,
-      fetch_bundle_query: FetchBundle::new(pool)?,
+      fetch_address_query: FetchAddress::new(pool, counters.clone())?,
+      fetch_bundle_query: FetchBundle::new(pool, counters.clone())?,
       insert_event_query: InsertEvent::new(pool)?,
-      counters,
     })
   }
 
@@ -40,42 +39,34 @@ impl<'a> Write<'a> {
     &mut self,
     transaction: &mut Transaction,
   ) -> Result<(Option<ApproveVec>, Option<SolidateVec>)> {
-    let result = self
-      .find_transaction_by_hash_query
-      .exec(transaction.hash())?;
-    let id_tx = if let Some(record) = result {
-      if record.id_trunk.unwrap_or(0) != 0 &&
-        record.id_branch.unwrap_or(0) != 0
-      {
+    let (current_tx, trunk_tx, branch_tx) = self.find_transactions_query.exec(
+      transaction.hash(),
+      transaction.trunk_hash(),
+      transaction.branch_hash(),
+    )?;
+    if let Some(ref record) = current_tx {
+      if record.id_trunk != 0 && record.id_branch != 0 {
         return Ok((None, None));
       }
-      Some(record.id_tx?)
-    } else {
-      None
-    };
+    }
     let timestamp = utils::milliseconds_since_epoch()?;
-    let (id_trunk, trunk_height, trunk_solid) =
-      self.check_node(transaction.trunk_hash())?;
-    let (id_branch, _, branch_solid) =
-      self.check_node(transaction.branch_hash())?;
-    let id_address = self
-      .fetch_address_query
-      .exec(&self.counters, transaction.address_hash())?;
+    let trunk_tx = self.check_parent(trunk_tx, transaction.trunk_hash())?;
+    let branch_tx = self.check_parent(branch_tx, transaction.branch_hash())?;
+    let id_address = self.fetch_address_query.exec(transaction.address_hash())?;
     let id_bundle = self.fetch_bundle_query.exec(
-      &self.counters,
       timestamp,
       transaction.bundle_hash(),
       transaction.last_index(),
     )?;
-    let height = if transaction.solid() != 0b11 && trunk_solid == 0b11 {
-      trunk_height + 1
+    let height = if transaction.solid() != 0b11 && trunk_tx.solid == 0b11 {
+      trunk_tx.height + 1
     } else {
       0
     };
-    if trunk_solid == 0b11 {
+    if trunk_tx.solid == 0b11 {
       transaction.solidate(0b10);
     }
-    if branch_solid == 0b11 {
+    if branch_tx.solid == 0b11 {
       transaction.solidate(0b01);
     }
     let record = UpsertTransactionRecord {
@@ -88,16 +79,14 @@ impl<'a> Write<'a> {
       is_mst: transaction.is_milestone(),
       mst_a: transaction.is_milestone(),
       solid: transaction.solid(),
-      id_trunk,
-      id_branch,
+      id_trunk: trunk_tx.id_tx,
+      id_branch: branch_tx.id_tx,
       id_address,
       id_bundle,
       height,
     };
-    if id_tx.is_none() {
-      self
-        .upsert_transaction_query
-        .insert(&self.counters, record)?;
+    if current_tx.is_none() {
+      self.upsert_transaction_query.insert(record)?;
     } else {
       self.upsert_transaction_query.update(record)?;
     }
@@ -107,32 +96,42 @@ impl<'a> Write<'a> {
     self.insert_event_query.new_transaction_received(timestamp)?;
     let approve_data = if transaction.is_milestone() {
       self.insert_event_query.milestone_received(timestamp)?;
-      Some(vec![id_trunk, id_branch])
+      Some(vec![trunk_tx.id_tx, branch_tx.id_tx])
     } else {
       None
     };
     let solidate_data =
-      id_tx.and_then(|id_tx| if transaction.solid() == 0b11 {
-        Some(vec![(id_tx, Some(height))])
+      current_tx.and_then(|current_tx| if transaction.solid() == 0b11 {
+        Some(vec![(current_tx.id_tx, Some(height))])
       } else {
         None
       });
     Ok((approve_data, solidate_data))
   }
 
-  fn check_node(&mut self, hash: &str) -> Result<(u64, i32, u8)> {
-    match self.find_transaction_by_hash_query.exec(hash)? {
+  fn check_parent(
+    &mut self,
+    transaction: Option<FindTransactionsResult>,
+    hash: &str,
+  ) -> Result<FindTransactionsResult> {
+    match transaction {
       Some(record) => {
-        let id_tx = record.id_tx?;
+        let id_tx = record.id_tx;
         self.direct_approve_transaction_query.exec(id_tx)?;
-        Ok((id_tx, record.height?, record.solid?))
+        Ok(record)
       }
       None => {
         let (height, solid) = (0, if hash == NULL_HASH { 0b11 } else { 0b00 });
         let id_tx = self
           .insert_transaction_placeholder_query
-          .exec(&self.counters, hash, height, solid)?;
-        Ok((id_tx, height, solid))
+          .exec(hash, height, solid)?;
+        Ok(FindTransactionsResult {
+          id_tx,
+          height,
+          solid,
+          id_trunk: 0,
+          id_branch: 0,
+        })
       }
     }
   }

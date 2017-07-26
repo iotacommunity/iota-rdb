@@ -1,8 +1,10 @@
 use counters::Counters;
 use mysql;
 use query::Result;
+use std::sync::Arc;
 
 pub struct UpsertTransaction<'a> {
+  counters: Arc<Counters>,
   insert_stmt: mysql::Stmt<'a>,
   update_stmt: mysql::Stmt<'a>,
 }
@@ -25,8 +27,9 @@ pub struct UpsertTransactionRecord<'a> {
 }
 
 impl<'a> UpsertTransaction<'a> {
-  pub fn new(pool: &mysql::Pool) -> Result<Self> {
+  pub fn new(pool: &mysql::Pool, counters: Arc<Counters>) -> Result<Self> {
     Ok(Self {
+      counters,
       insert_stmt: pool.prepare(
         r#"
           INSERT INTO tx (
@@ -63,10 +66,9 @@ impl<'a> UpsertTransaction<'a> {
 
   pub fn insert(
     &mut self,
-    counters: &Counters,
     transaction: UpsertTransactionRecord,
   ) -> Result<mysql::QueryResult> {
-    let id_tx = counters.next_transaction();
+    let id_tx = self.counters.next_transaction();
     let mut params = transaction.to_params();
     params.push(("id_tx".to_owned(), mysql::Value::from(id_tx)));
     Ok(self.insert_stmt.execute(params)?)

@@ -1,11 +1,11 @@
 use mysql;
 use query::{Error, Result};
 
-pub struct FindTransactionById<'a> {
+pub struct FindTransaction<'a> {
   stmt: mysql::Stmt<'a>,
 }
 
-pub struct FindTransactionByIdResult {
+pub struct FindTransactionResult {
   pub id_trunk: mysql::Result<u64>,
   pub id_branch: mysql::Result<u64>,
   pub id_bundle: mysql::Result<u64>,
@@ -13,7 +13,7 @@ pub struct FindTransactionByIdResult {
   pub mst_a: mysql::Result<bool>,
 }
 
-impl<'a> FindTransactionById<'a> {
+impl<'a> FindTransaction<'a> {
   pub fn new(pool: &mysql::Pool) -> Result<Self> {
     Ok(Self {
       stmt: pool.prepare(
@@ -27,12 +27,12 @@ impl<'a> FindTransactionById<'a> {
     })
   }
 
-  pub fn exec(&mut self, id_tx: u64) -> Result<FindTransactionByIdResult> {
+  pub fn exec(&mut self, id_tx: u64) -> Result<FindTransactionResult> {
     let mut row = self
       .stmt
       .first_exec(params!{"id_tx" => id_tx})?
       .ok_or(Error::RecordNotFound)?;
-    Ok(FindTransactionByIdResult {
+    Ok(FindTransactionResult {
       id_trunk: row.take_opt("id_trunk").ok_or(Error::ColumnNotFound)?,
       id_branch: row.take_opt("id_branch").ok_or(Error::ColumnNotFound)?,
       id_bundle: row.take_opt("id_bundle").ok_or(Error::ColumnNotFound)?,

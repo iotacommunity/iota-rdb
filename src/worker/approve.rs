@@ -1,12 +1,12 @@
 use mysql;
-use query::{ApproveTransaction, FindTransactionById, InsertEvent, UpdateBundle};
+use query::{ApproveTransaction, FindTransaction, InsertEvent, UpdateBundle};
 use utils;
 use worker::Result;
 
 pub type ApproveVec = Vec<u64>;
 
 pub struct Approve<'a> {
-  find_transaction_by_id_query: FindTransactionById<'a>,
+  find_transaction_query: FindTransaction<'a>,
   approve_transaction_query: ApproveTransaction<'a>,
   update_bundle_query: UpdateBundle<'a>,
   insert_event_query: InsertEvent<'a>,
@@ -15,7 +15,7 @@ pub struct Approve<'a> {
 impl<'a> Approve<'a> {
   pub fn new(pool: &mysql::Pool) -> Result<Self> {
     Ok(Self {
-      find_transaction_by_id_query: FindTransactionById::new(pool)?,
+      find_transaction_query: FindTransaction::new(pool)?,
       approve_transaction_query: ApproveTransaction::new(pool)?,
       update_bundle_query: UpdateBundle::new(pool)?,
       insert_event_query: InsertEvent::new(pool)?,
@@ -25,7 +25,7 @@ impl<'a> Approve<'a> {
   pub fn perform(&mut self, mut nodes: ApproveVec) -> Result<()> {
     let (timestamp, mut counter) = (utils::milliseconds_since_epoch()?, 0);
     while let Some(id) = nodes.pop() {
-      let record = self.find_transaction_by_id_query.exec(id)?;
+      let record = self.find_transaction_query.exec(id)?;
       if record.mst_a.unwrap_or(false) {
         continue;
       }
