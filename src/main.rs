@@ -15,7 +15,7 @@ mod args;
 mod worker;
 mod transaction;
 mod counters;
-mod mapper;
+mod query;
 mod utils;
 
 use args::Args;
@@ -64,20 +64,20 @@ fn main() {
     .expect("ZMQ socket connect failure");
   socket.set_subscribe(b"tx ").expect("ZMQ subscribe failure");
   WritePool {
-    rx: write_rx,
+    write_rx,
     approve_tx: &approve_tx,
     solidate_tx: &solidate_tx,
     pool: &pool,
-    counters: counters,
+    counters,
     milestone_address: args.milestone_address(),
     milestone_start_index: args.milestone_start_index(),
   }.run(args.write_threads_count(), args.verbose());
   ApprovePool {
-    rx: approve_rx,
+    approve_rx,
     pool: &pool,
   }.run(args.approve_threads_count(), args.verbose());
   SolidatePool {
-    rx: solidate_rx,
+    solidate_rx,
     pool: &pool,
   }.run(args.solidate_threads_count(), args.verbose());
   ZmqReader {

@@ -1,24 +1,27 @@
-use mapper::Mapper;
 use mysql;
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
-use transaction::Transaction;
+use worker::{Approve, ApproveVec};
 
 pub struct ApprovePool<'a> {
-  pub rx: mpsc::Receiver<Vec<u64>>,
+  pub approve_rx: mpsc::Receiver<ApproveVec>,
   pub pool: &'a mysql::Pool,
 }
 
 impl<'a> ApprovePool<'a> {
   pub fn run(self, threads_count: usize, verbose: bool) {
-    let rx = Arc::new(Mutex::new(self.rx));
+    let approve_rx = Arc::new(Mutex::new(self.approve_rx));
     for i in 0..threads_count {
-      let rx = rx.clone();
-      let mut mapper = Mapper::new(self.pool).expect("MySQL mapper failure");
+      let approve_rx = approve_rx.clone();
+      let mut worker =
+        Approve::new(self.pool).expect("Worker initialization failure");
       thread::spawn(move || loop {
-        let rx = rx.lock().expect("Mutex is poisoned");
-        let vec = rx.recv().expect("Thread communication failure");
-        match Transaction::approve(&mut mapper, vec.clone()) {
+        let vec = approve_rx
+          .lock()
+          .expect("Mutex is poisoned")
+          .recv()
+          .expect("Thread communication failure");
+        match worker.perform(vec.clone()) {
           Ok(()) => {
             if verbose {
               println!("approve_thread#{} {:?}", i, vec);
