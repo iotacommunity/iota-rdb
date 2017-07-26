@@ -1,12 +1,10 @@
 use counters::Counters;
-use mapper::Mapper;
 use mysql;
 use std::sync::{Arc, Mutex, mpsc};
-use std::thread;
-use transaction::{ApproveVec, SolidateVec, Transaction};
+use worker::{ApproveVec, SolidateVec, Write};
 
 pub struct WritePool<'a> {
-  pub rx: mpsc::Receiver<String>,
+  pub write_rx: mpsc::Receiver<String>,
   pub approve_tx: &'a mpsc::Sender<ApproveVec>,
   pub solidate_tx: &'a mpsc::Sender<SolidateVec>,
   pub pool: &'a mysql::Pool,
@@ -17,49 +15,16 @@ pub struct WritePool<'a> {
 
 impl<'a> WritePool<'a> {
   pub fn run(self, threads_count: usize, verbose: bool) {
-    let rx = Arc::new(Mutex::new(self.rx));
-    for i in 0..threads_count {
-      let rx = rx.clone();
-      let approve_tx = self.approve_tx.clone();
-      let solidate_tx = self.solidate_tx.clone();
-      let counters = self.counters.clone();
-      let mut mapper = Mapper::new(self.pool).expect("MySQL mapper failure");
-      let milestone_address = self.milestone_address.to_owned();
-      let milestone_start_index = self.milestone_start_index.to_owned();
-      thread::spawn(move || loop {
-        let rx = rx.lock().expect("Mutex is poisoned");
-        match Transaction::parse(
-          &rx.recv().expect("Thread communication failure"),
-          &milestone_address,
-          &milestone_start_index,
-        ) {
-          Ok(mut transaction) => {
-            match transaction.process(&mut mapper, &counters) {
-              Ok((approve_data, solidate_data)) => {
-                if verbose {
-                  println!("write_thread#{} {:?}", i, transaction);
-                }
-                if let Some(approve_data) = approve_data {
-                  approve_tx
-                    .send(approve_data)
-                    .expect("Thread communication failure");
-                }
-                if let Some(solidate_data) = solidate_data {
-                  solidate_tx
-                    .send(solidate_data)
-                    .expect("Thread communication failure");
-                }
-              }
-              Err(err) => {
-                eprintln!("Transaction processing error: {}", err);
-              }
-            }
-          }
-          Err(err) => {
-            eprintln!("Transaction parsing error: {}", err);
-          }
-        }
-      });
+    let write_rx = Arc::new(Mutex::new(self.write_rx));
+    for thread_number in 0..threads_count {
+      Write {
+        write_rx: write_rx.clone(),
+        approve_tx: self.approve_tx.clone(),
+        solidate_tx: self.solidate_tx.clone(),
+        counters: self.counters.clone(),
+        milestone_address: self.milestone_address.to_owned(),
+        milestone_start_index: self.milestone_start_index.to_owned(),
+      }.spawn(self.pool, thread_number, verbose);
     }
   }
 }

@@ -1,12 +1,8 @@
 mod error;
 
 pub use self::error::{Error, Result};
-use counters::Counters;
-use mapper::{Mapper, NewTransaction};
-use utils;
 
 pub const TAG_LENGTH: usize = 27;
-const NULL_HASH: &str = "999999999999999999999999999999999999999999999999999999999999999999999999999999999";
 
 #[derive(Debug)]
 pub struct Transaction<'a> {
@@ -24,11 +20,8 @@ pub struct Transaction<'a> {
   solid: u8,
 }
 
-pub type ApproveVec = Vec<u64>;
-pub type SolidateVec = Vec<(u64, Option<i32>)>;
-
 impl<'a> Transaction<'a> {
-  pub fn parse(
+  pub fn new(
     source: &'a str,
     milestone_address: &str,
     milestone_start_index: &str,
@@ -66,182 +59,56 @@ impl<'a> Transaction<'a> {
     })
   }
 
-  pub fn approve(mapper: &mut Mapper, mut nodes: ApproveVec) -> Result<()> {
-    let (timestamp, mut counter) = (utils::milliseconds_since_epoch()?, 0);
-    while let Some(id) = nodes.pop() {
-      let record = mapper.select_transaction_by_id(id)?;
-      if record.mst_a.unwrap_or(false) {
-        continue;
-      }
-      let id_trunk = record.id_trunk.unwrap_or(0);
-      let id_branch = record.id_branch.unwrap_or(0);
-      if id_trunk != 0 {
-        nodes.push(id_trunk);
-      }
-      if id_branch != 0 {
-        nodes.push(id_branch);
-      }
-      if let Ok(0) = record.current_idx {
-        if let Ok(id_bundle) = record.id_bundle {
-          mapper.update_bundle(id_bundle, timestamp)?;
-        }
-      }
-      mapper.approve_transaction(id)?;
-      counter += 1;
-    }
-    if counter > 0 {
-      mapper.subtanble_confirmation_event(timestamp, counter)?;
-    }
-    Ok(())
+  pub fn hash(&self) -> &str {
+    self.hash
   }
 
-  pub fn solidate(mapper: &mut Mapper, mut nodes: SolidateVec) -> Result<()> {
-    let (timestamp, mut counter) = (utils::milliseconds_since_epoch()?, 0);
-    while let Some((parent_id, parent_height)) = nodes.pop() {
-      let (mut trunk, mut branch) = (Vec::new(), Vec::new());
-      for record in mapper.select_child_transactions(parent_id)? {
-        if record.id_trunk? == parent_id {
-          trunk.push((record.id_tx?, record.height?, record.solid?));
-        } else if record.id_branch? == parent_id {
-          branch.push((record.id_tx?, record.height?, record.solid?));
-        }
-      }
-      Self::solidate_nodes(mapper, &mut nodes, &trunk, 0b10, parent_height)?;
-      Self::solidate_nodes(mapper, &mut nodes, &branch, 0b01, None)?;
-      counter += trunk.len() as i32;
-      counter += branch.len() as i32;
-    }
-    if counter > 0 {
-      mapper.subtangle_solidation_event(timestamp, counter)?;
-    }
-    Ok(())
+  pub fn address_hash(&self) -> &str {
+    self.address_hash
   }
 
-  pub fn process(
-    &mut self,
-    mapper: &mut Mapper,
-    counters: &Counters,
-  ) -> Result<(Option<ApproveVec>, Option<SolidateVec>)> {
-    let result = mapper.select_transaction_by_hash(self.hash)?;
-    let id_tx = if let Some(record) = result {
-      if record.id_trunk.unwrap_or(0) != 0 &&
-        record.id_branch.unwrap_or(0) != 0
-      {
-        return Ok((None, None));
-      }
-      Some(record.id_tx?)
-    } else {
-      None
-    };
-    let timestamp = utils::milliseconds_since_epoch()?;
-    let (id_trunk, trunk_height, trunk_solid) =
-      Self::check_node(mapper, counters, self.trunk_hash)?;
-    let (id_branch, _, branch_solid) =
-      Self::check_node(mapper, counters, self.branch_hash)?;
-    let id_address = mapper.fetch_address(counters, self.address_hash)?;
-    let id_bundle = mapper
-      .fetch_bundle(counters, timestamp, self.bundle_hash, self.last_index)?;
-    let height = if self.solid != 0b11 && trunk_solid == 0b11 {
-      trunk_height + 1
-    } else {
-      0
-    };
-    if trunk_solid == 0b11 {
-      self.solid |= 0b10;
-    }
-    if branch_solid == 0b11 {
-      self.solid |= 0b01;
-    }
-    let record = NewTransaction {
-      hash: self.hash,
-      tag: self.tag,
-      value: self.value,
-      timestamp: self.timestamp,
-      current_idx: self.current_index,
-      last_idx: self.last_index,
-      is_mst: self.is_milestone,
-      mst_a: self.is_milestone,
-      solid: self.solid,
-      id_trunk,
-      id_branch,
-      id_address,
-      id_bundle,
-      height,
-    };
-    if id_tx.is_none() {
-      mapper.insert_transaction(counters, record)?;
-    } else {
-      mapper.update_transaction(record)?;
-    }
-    if self.solid != 0b11 {
-      mapper.unsolid_transaction_event(timestamp)?;
-    }
-    mapper.new_transaction_received_event(timestamp)?;
-    let approve_data = if self.is_milestone {
-      mapper.milestone_received_event(timestamp)?;
-      Some(vec![id_trunk, id_branch])
-    } else {
-      None
-    };
-    let solidate_data = id_tx.and_then(|id_tx| if self.solid == 0b11 {
-      Some(vec![(id_tx, Some(height))])
-    } else {
-      None
-    });
-    Ok((approve_data, solidate_data))
+  pub fn value(&self) -> i64 {
+    self.value
   }
 
-  fn check_node(
-    mapper: &mut Mapper,
-    counters: &Counters,
-    hash: &str,
-  ) -> Result<(u64, i32, u8)> {
-    match mapper.select_transaction_by_hash(hash)? {
-      Some(record) => {
-        let id_tx = record.id_tx?;
-        mapper.direct_approve_transaction(id_tx)?;
-        Ok((id_tx, record.height?, record.solid?))
-      }
-      None => {
-        let (height, solid) = (0, if hash == NULL_HASH { 0b11 } else { 0b00 });
-        let id_tx = mapper
-          .insert_transaction_placeholder(counters, hash, height, solid)?;
-        Ok((id_tx, height, solid))
-      }
-    }
+  pub fn tag(&self) -> &str {
+    self.tag
   }
 
-  fn solidate_nodes(
-    mapper: &mut Mapper,
-    nodes: &mut SolidateVec,
-    ids: &[(u64, i32, u8)],
-    solid: u8,
-    height: Option<i32>,
-  ) -> Result<()> {
-    for &(id, mut node_height, mut node_solid) in ids {
-      if node_solid & solid != 0b00 {
-        continue;
-      }
-      node_solid |= solid;
-      match height {
-        Some(height) => {
-          node_height = height + 1;
-          mapper
-            .solidate_trunk_transaction(id, node_height, node_solid)?;
-        }
-        None => {
-          mapper.solidate_branch_transaction(id, node_solid)?;
-        }
-      }
-      if node_solid == 0b11 {
-        let node_height = if node_height > 0 {
-          Some(node_height)
-        } else {
-          None
-        };
-        nodes.push((id, node_height));
-      }
-    }
-    Ok(())
+  pub fn timestamp(&self) -> i64 {
+    self.timestamp
+  }
+
+  pub fn current_index(&self) -> i32 {
+    self.current_index
+  }
+
+  pub fn last_index(&self) -> i32 {
+    self.last_index
+  }
+
+  pub fn bundle_hash(&self) -> &str {
+    self.bundle_hash
+  }
+
+  pub fn trunk_hash(&self) -> &str {
+    self.trunk_hash
+  }
+
+  pub fn branch_hash(&self) -> &str {
+    self.branch_hash
+  }
+
+  pub fn is_milestone(&self) -> bool {
+    self.is_milestone
+  }
+
+  pub fn solid(&self) -> u8 {
+    self.solid
+  }
+
+  pub fn solidate(&mut self, solid: u8) -> &mut Self {
+    self.solid |= solid;
+    self
   }
 }
