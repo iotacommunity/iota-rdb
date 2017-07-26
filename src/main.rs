@@ -15,7 +15,6 @@ mod args;
 mod worker;
 mod transaction;
 mod counters;
-mod mapper;
 mod query;
 mod utils;
 

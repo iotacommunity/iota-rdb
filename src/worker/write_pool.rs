@@ -1,5 +1,4 @@
 use counters::Counters;
-use mapper::Mapper;
 use mysql;
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
@@ -26,9 +25,8 @@ impl<'a> WritePool<'a> {
       let counters = self.counters.clone();
       let milestone_address = self.milestone_address.to_owned();
       let milestone_start_index = self.milestone_start_index.to_owned();
-      let mapper = Mapper::new(self.pool).expect("MySQL mapper failure");
-      let mut worker = Write::new(self.pool, mapper, counters)
-        .expect("Worker initialization failure");
+      let mut worker =
+        Write::new(self.pool, counters).expect("Worker initialization failure");
       thread::spawn(move || loop {
         let message = write_rx
           .lock()

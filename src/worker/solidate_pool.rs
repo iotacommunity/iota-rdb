@@ -1,4 +1,3 @@
-use mapper::Mapper;
 use mysql;
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
@@ -14,8 +13,8 @@ impl<'a> SolidatePool<'a> {
     let solidate_rx = Arc::new(Mutex::new(self.solidate_rx));
     for i in 0..threads_count {
       let solidate_rx = solidate_rx.clone();
-      let mapper = Mapper::new(self.pool).expect("MySQL mapper failure");
-      let mut worker = Solidate::new(mapper);
+      let mut worker =
+        Solidate::new(self.pool).expect("Worker initialization failure");
       thread::spawn(move || loop {
         let vec = solidate_rx
           .lock()

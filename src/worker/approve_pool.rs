@@ -1,4 +1,3 @@
-use mapper::Mapper;
 use mysql;
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
@@ -14,8 +13,8 @@ impl<'a> ApprovePool<'a> {
     let approve_rx = Arc::new(Mutex::new(self.approve_rx));
     for i in 0..threads_count {
       let approve_rx = approve_rx.clone();
-      let mapper = Mapper::new(self.pool).expect("MySQL mapper failure");
-      let mut worker = Approve::new(mapper);
+      let mut worker =
+        Approve::new(self.pool).expect("Worker initialization failure");
       thread::spawn(move || loop {
         let vec = approve_rx
           .lock()

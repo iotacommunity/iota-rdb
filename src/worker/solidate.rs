@@ -1,23 +1,30 @@
-use mapper::Mapper;
+use mysql;
+use query::{FindChildTransactions, InsertEvent, SolidateTransaction};
 use utils;
 use worker::Result;
 
 pub type SolidateVec = Vec<(u64, Option<i32>)>;
 
 pub struct Solidate<'a> {
-  mapper: Mapper<'a>,
+  find_child_transactions_query: FindChildTransactions<'a>,
+  solidate_transaction_query: SolidateTransaction<'a>,
+  insert_event_query: InsertEvent<'a>,
 }
 
 impl<'a> Solidate<'a> {
-  pub fn new(mapper: Mapper<'a>) -> Self {
-    Self { mapper }
+  pub fn new(pool: &mysql::Pool) -> Result<Self> {
+    Ok(Self {
+      find_child_transactions_query: FindChildTransactions::new(pool)?,
+      solidate_transaction_query: SolidateTransaction::new(pool)?,
+      insert_event_query: InsertEvent::new(pool)?,
+    })
   }
 
   pub fn perform(&mut self, mut nodes: SolidateVec) -> Result<()> {
     let (timestamp, mut counter) = (utils::milliseconds_since_epoch()?, 0);
     while let Some((parent_id, parent_height)) = nodes.pop() {
       let (mut trunk, mut branch) = (Vec::new(), Vec::new());
-      for record in self.mapper.select_child_transactions(parent_id)? {
+      for record in self.find_child_transactions_query.exec(parent_id)? {
         if record.id_trunk? == parent_id {
           trunk.push((record.id_tx?, record.height?, record.solid?));
         } else if record.id_branch? == parent_id {
@@ -31,7 +38,9 @@ impl<'a> Solidate<'a> {
       counter += branch.len() as i32;
     }
     if counter > 0 {
-      self.mapper.subtangle_solidation_event(timestamp, counter)?;
+      self
+        .insert_event_query
+        .subtangle_solidation(timestamp, counter)?;
     }
     Ok(())
   }
@@ -52,11 +61,11 @@ impl<'a> Solidate<'a> {
         Some(height) => {
           node_height = height + 1;
           self
-            .mapper
-            .solidate_trunk_transaction(id, node_height, node_solid)?;
+            .solidate_transaction_query
+            .trunk(id, node_height, node_solid)?;
         }
         None => {
-          self.mapper.solidate_branch_transaction(id, node_solid)?;
+          self.solidate_transaction_query.branch(id, node_solid)?;
         }
       }
       if node_solid == 0b11 {

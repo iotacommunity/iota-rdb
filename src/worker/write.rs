@@ -1,7 +1,8 @@
 use counters::Counters;
-use mapper::{Mapper, NewTransaction};
 use mysql;
-use query::FindTransactionByHash;
+use query::{DirectApproveTransaction, FetchAddress, FetchBundle,
+            FindTransactionByHash, InsertEvent, InsertTransactionPlaceholder,
+            UpsertTransaction, UpsertTransactionRecord};
 use std::sync::Arc;
 use transaction::Transaction;
 use utils;
@@ -10,20 +11,27 @@ use worker::{ApproveVec, Result, SolidateVec};
 const NULL_HASH: &str = "999999999999999999999999999999999999999999999999999999999999999999999999999999999";
 
 pub struct Write<'a> {
-  mapper: Mapper<'a>,
   counters: Arc<Counters>,
   find_transaction_by_hash_query: FindTransactionByHash<'a>,
+  upsert_transaction_query: UpsertTransaction<'a>,
+  insert_transaction_placeholder_query: InsertTransactionPlaceholder<'a>,
+  direct_approve_transaction_query: DirectApproveTransaction<'a>,
+  fetch_address_query: FetchAddress<'a>,
+  fetch_bundle_query: FetchBundle<'a>,
+  insert_event_query: InsertEvent<'a>,
 }
 
 impl<'a> Write<'a> {
-  pub fn new(
-    pool: &mysql::Pool,
-    mapper: Mapper<'a>,
-    counters: Arc<Counters>,
-  ) -> Result<Self> {
+  pub fn new(pool: &mysql::Pool, counters: Arc<Counters>) -> Result<Self> {
     Ok(Self {
       find_transaction_by_hash_query: FindTransactionByHash::new(pool)?,
-      mapper,
+      upsert_transaction_query: UpsertTransaction::new(pool)?,
+      insert_transaction_placeholder_query:
+        InsertTransactionPlaceholder::new(pool)?,
+      direct_approve_transaction_query: DirectApproveTransaction::new(pool)?,
+      fetch_address_query: FetchAddress::new(pool)?,
+      fetch_bundle_query: FetchBundle::new(pool)?,
+      insert_event_query: InsertEvent::new(pool)?,
       counters,
     })
   }
@@ -51,9 +59,9 @@ impl<'a> Write<'a> {
     let (id_branch, _, branch_solid) =
       self.check_node(transaction.branch_hash())?;
     let id_address = self
-      .mapper
-      .fetch_address(&self.counters, transaction.address_hash())?;
-    let id_bundle = self.mapper.fetch_bundle(
+      .fetch_address_query
+      .exec(&self.counters, transaction.address_hash())?;
+    let id_bundle = self.fetch_bundle_query.exec(
       &self.counters,
       timestamp,
       transaction.bundle_hash(),
@@ -70,7 +78,7 @@ impl<'a> Write<'a> {
     if branch_solid == 0b11 {
       transaction.solidate(0b01);
     }
-    let record = NewTransaction {
+    let record = UpsertTransactionRecord {
       hash: transaction.hash(),
       tag: transaction.tag(),
       value: transaction.value(),
@@ -87,16 +95,18 @@ impl<'a> Write<'a> {
       height,
     };
     if id_tx.is_none() {
-      self.mapper.insert_transaction(&self.counters, record)?;
+      self
+        .upsert_transaction_query
+        .insert(&self.counters, record)?;
     } else {
-      self.mapper.update_transaction(record)?;
+      self.upsert_transaction_query.update(record)?;
     }
     if transaction.solid() != 0b11 {
-      self.mapper.unsolid_transaction_event(timestamp)?;
+      self.insert_event_query.unsolid_transaction(timestamp)?;
     }
-    self.mapper.new_transaction_received_event(timestamp)?;
+    self.insert_event_query.new_transaction_received(timestamp)?;
     let approve_data = if transaction.is_milestone() {
-      self.mapper.milestone_received_event(timestamp)?;
+      self.insert_event_query.milestone_received(timestamp)?;
       Some(vec![id_trunk, id_branch])
     } else {
       None
@@ -114,14 +124,14 @@ impl<'a> Write<'a> {
     match self.find_transaction_by_hash_query.exec(hash)? {
       Some(record) => {
         let id_tx = record.id_tx?;
-        self.mapper.direct_approve_transaction(id_tx)?;
+        self.direct_approve_transaction_query.exec(id_tx)?;
         Ok((id_tx, record.height?, record.solid?))
       }
       None => {
         let (height, solid) = (0, if hash == NULL_HASH { 0b11 } else { 0b00 });
         let id_tx = self
-          .mapper
-          .insert_transaction_placeholder(&self.counters, hash, height, solid)?;
+          .insert_transaction_placeholder_query
+          .exec(&self.counters, hash, height, solid)?;
         Ok((id_tx, height, solid))
       }
     }
