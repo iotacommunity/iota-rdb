@@ -12,6 +12,13 @@ clippy = {version = "*", optional = true}
 
 [dependencies.iota-trytes]
 path = "iota.rs/trytes"
+features = ['alloc']
+
+[dependencies.iota-sign]
+path = "iota.rs/sign"
+
+[dependencies.iota-curl-cpu]
+path = "iota.rs/curl-cpu"
 
 [features]
 default = []

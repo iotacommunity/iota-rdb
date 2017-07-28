@@ -2,12 +2,11 @@ mod error;
 
 pub use self::error::{Error, Result};
 use clap::ArgMatches;
-use iota_trytes::TRITS_PER_TRYTE;
+use iota_trytes::{TRITS_PER_TRYTE, trits_to_string};
 use iota_trytes::num::int2trits;
-use iota_trytes::string::trits_to_string;
 use transaction::TAG_LENGTH;
 
-const MILESTONE_START_INDEX_TRITS: u8 = (TAG_LENGTH * TRITS_PER_TRYTE) as u8;
+const MILESTONE_START_INDEX_TRITS: usize = TAG_LENGTH * TRITS_PER_TRYTE;
 
 pub struct Args<'a> {
   zmq_uri: &'a str,
@@ -94,10 +93,8 @@ impl<'a> Args<'a> {
   }
 
   fn convert_trits(number: isize) -> Result<String> {
-    let mut trits = int2trits(number, MILESTONE_START_INDEX_TRITS);
-    while trits.len() < MILESTONE_START_INDEX_TRITS as usize {
-      trits.push(0);
-    }
+    let mut trits = [0; MILESTONE_START_INDEX_TRITS];
+    int2trits(number, &mut trits);
     Ok(trits_to_string(&trits)
       .ok_or(Error::MilestoneStartIndexToTrits)?)
   }
