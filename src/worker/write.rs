@@ -55,6 +55,9 @@ fn transaction_block(
   counters: &Counters,
   transaction: &Transaction,
 ) -> Result<(Option<ApproveVec>, Option<SolidateVec>)> {
+  if transaction.hash() == NULL_HASH {
+    return Ok((None, None));
+  }
   let (current_tx, trunk_tx, branch_tx) = query::find_transactions(
     conn,
     transaction.hash(),
