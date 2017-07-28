@@ -9,17 +9,18 @@ pub struct Counters {
 }
 
 impl Counters {
-  pub fn new(pool: &mysql::Pool) -> mysql::Result<Self> {
+  pub fn new(mysql_uri: &str) -> mysql::Result<Self> {
+    let mut conn = mysql::Conn::new(mysql_uri)?;
     let transaction = Self::fetch_counter(
-      pool,
+      &mut conn,
       r"SELECT id_tx FROM tx ORDER BY id_tx DESC LIMIT 1",
     )?;
     let address = Self::fetch_counter(
-      pool,
+      &mut conn,
       r"SELECT id_address FROM address ORDER BY id_address DESC LIMIT 1",
     )?;
     let bundle = Self::fetch_counter(
-      pool,
+      &mut conn,
       r"SELECT id_bundle FROM bundle ORDER BY id_bundle DESC LIMIT 1",
     )?;
     Ok(Self {
@@ -47,8 +48,8 @@ impl Counters {
     *counter
   }
 
-  fn fetch_counter(pool: &mysql::Pool, query: &str) -> mysql::Result<u64> {
-    match pool.get_conn()?.first(query)? {
+  fn fetch_counter(conn: &mut mysql::Conn, query: &str) -> mysql::Result<u64> {
+    match conn.first(query)? {
       Some(row) => {
         let (id,) = mysql::from_row_opt(row)?;
         Ok(id)

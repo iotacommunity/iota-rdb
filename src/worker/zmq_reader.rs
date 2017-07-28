@@ -12,12 +12,12 @@ impl<'a> ZmqReader<'a> {
       match self.socket.recv_string(0) {
         Ok(Ok(string)) => {
           if verbose {
-            println!("ZeroMQ message received: {}", string);
+            println!("[zmq] {}", string);
           }
           self.tx.send(string).expect("Thread communication failure");
         }
         Ok(Err(err)) => {
-          eprintln!("Unexpected byte sequence: {:?}", err);
+          eprintln!("[zmq] Unexpected byte sequence: {:?}", err);
         }
         Err(err) => {
           eprintln!("{}", err);

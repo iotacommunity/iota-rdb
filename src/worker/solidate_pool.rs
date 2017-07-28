@@ -1,11 +1,10 @@
-use mysql;
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use worker::{Solidate, SolidateVec};
 
 pub struct SolidatePool<'a> {
   pub solidate_rx: mpsc::Receiver<SolidateVec>,
-  pub pool: &'a mysql::Pool,
+  pub mysql_uri: &'a str,
 }
 
 impl<'a> SolidatePool<'a> {
@@ -14,7 +13,7 @@ impl<'a> SolidatePool<'a> {
     for i in 0..threads_count {
       let solidate_rx = solidate_rx.clone();
       let mut worker =
-        Solidate::new(self.pool).expect("Worker initialization failure");
+        Solidate::new(self.mysql_uri).expect("Worker initialization failure");
       thread::spawn(move || loop {
         let vec = solidate_rx
           .lock()
@@ -24,11 +23,11 @@ impl<'a> SolidatePool<'a> {
         match worker.perform(vec.clone()) {
           Ok(()) => {
             if verbose {
-              println!("solidate_thread#{} {:?}", i, vec);
+              println!("[s#{}] {:?}", i, vec);
             }
           }
           Err(err) => {
-            eprintln!("Transaction solidity check error: {}", err);
+            eprintln!("[s#{}] Error: {}", i, err);
           }
         }
       });

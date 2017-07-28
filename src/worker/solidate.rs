@@ -1,31 +1,25 @@
 use mysql;
-use query::{FindChildTransactions, FindChildTransactionsResult, InsertEvent,
-            SolidateTransaction};
+use query::{self, FindChildTransactionsResult, event};
 use utils;
 use worker::Result;
 
 pub type SolidateVec = Vec<(u64, Option<i32>)>;
 
-pub struct Solidate<'a> {
-  find_child_transactions_query: FindChildTransactions<'a>,
-  solidate_transaction_query: SolidateTransaction<'a>,
-  insert_event_query: InsertEvent<'a>,
+pub struct Solidate {
+  conn: mysql::Conn,
 }
 
-impl<'a> Solidate<'a> {
-  pub fn new(pool: &mysql::Pool) -> Result<Self> {
-    Ok(Self {
-      find_child_transactions_query: FindChildTransactions::new(pool)?,
-      solidate_transaction_query: SolidateTransaction::new(pool)?,
-      insert_event_query: InsertEvent::new(pool)?,
-    })
+impl Solidate {
+  pub fn new(mysql_uri: &str) -> Result<Self> {
+    let conn = mysql::Conn::new(mysql_uri)?;
+    Ok(Self { conn })
   }
 
   pub fn perform(&mut self, mut nodes: SolidateVec) -> Result<()> {
     let (timestamp, mut counter) = (utils::milliseconds_since_epoch()?, 0);
     while let Some((id, height)) = nodes.pop() {
       let (mut trunk, mut branch) = (Vec::new(), Vec::new());
-      for record in self.find_child_transactions_query.exec(id)? {
+      for record in query::find_child_transactions(&mut self.conn, id)? {
         if record.id_trunk == id {
           trunk.push(record);
         } else if record.id_branch == id {
@@ -38,9 +32,7 @@ impl<'a> Solidate<'a> {
       counter += branch.len() as i32;
     }
     if counter > 0 {
-      self
-        .insert_event_query
-        .subtangle_solidation(timestamp, counter)?;
+      event::subtangle_solidation(&mut self.conn, timestamp, counter)?;
     }
     Ok(())
   }
@@ -60,14 +52,19 @@ impl<'a> Solidate<'a> {
       match height {
         Some(height) => {
           record.height = height + 1;
-          self
-            .solidate_transaction_query
-            .trunk(record.id_tx, record.height, record.solid)?;
+          query::solidate_transaction_trunk(
+            &mut self.conn,
+            record.id_tx,
+            record.height,
+            record.solid,
+          )?;
         }
         None => {
-          self
-            .solidate_transaction_query
-            .branch(record.id_tx, record.solid)?;
+          query::solidate_transaction_branch(
+            &mut self.conn,
+            record.id_tx,
+            record.solid,
+          )?;
         }
       }
       if record.solid == 0b11 {

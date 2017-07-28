@@ -1,10 +1,6 @@
 use mysql;
 use query::Result;
 
-pub struct FindTransactions<'a> {
-  stmt: mysql::Stmt<'a>,
-}
-
 #[derive(Clone)]
 pub struct FindTransactionsResult {
   pub id_tx: u64,
@@ -14,59 +10,56 @@ pub struct FindTransactionsResult {
   pub solid: u8,
 }
 
-impl<'a> FindTransactions<'a> {
-  pub fn new(pool: &mysql::Pool) -> Result<Self> {
-    Ok(Self {
-      stmt: pool.prepare(
-        r#"
-          SELECT
-            id_tx, hash, id_trunk, id_branch, height, solid
-          FROM tx
-          WHERE hash IN (?, ?, ?)
-        "#,
-      )?,
-    })
-  }
+type ResultTuple = (
+  u64,
+  String,
+  Option<u64>,
+  Option<u64>,
+  Option<i32>,
+  Option<u8>,
+);
 
-  pub fn exec(
-    &mut self,
-    current_hash: &str,
-    trunk_hash: &str,
-    branch_hash: &str,
-  ) -> Result<
-    (
-      Option<FindTransactionsResult>,
-      Option<FindTransactionsResult>,
-      Option<FindTransactionsResult>,
-    ),
-  > {
-    let (mut current_tx, mut trunk_tx, mut branch_tx) = (None, None, None);
-    let results = self.stmt.execute((current_hash, trunk_hash, branch_hash))?;
-    for row in results {
-      let row = row?;
-      let (id_tx, hash, id_trunk, id_branch, height, solid): (
-        u64,
-        String,
-        Option<u64>,
-        Option<u64>,
-        Option<i32>,
-        Option<u8>,
-      ) = mysql::from_row_opt(row)?;
-      let record = FindTransactionsResult {
-        id_tx,
-        id_trunk: id_trunk.unwrap_or(0),
-        id_branch: id_branch.unwrap_or(0),
-        height: height.unwrap_or(0),
-        solid: solid.unwrap_or(0b00),
-      };
-      if hash == current_hash {
-        current_tx = Some(record);
-      } else if hash == trunk_hash {
-        trunk_tx = Some(record);
-      } else if hash == branch_hash {
-        branch_tx = Some(record);
-      }
+const QUERY: &str = r#"
+  SELECT
+    id_tx, hash, id_trunk, id_branch, height, solid
+  FROM tx
+  WHERE hash IN (?, ?, ?)
+  FOR UPDATE
+"#;
+
+pub fn find_transactions(
+  conn: &mut mysql::Transaction,
+  current_hash: &str,
+  trunk_hash: &str,
+  branch_hash: &str,
+) -> Result<
+  (
+    Option<FindTransactionsResult>,
+    Option<FindTransactionsResult>,
+    Option<FindTransactionsResult>,
+  ),
+> {
+  let (mut current_tx, mut trunk_tx, mut branch_tx) = (None, None, None);
+  let results = conn
+    .prep_exec(QUERY, (current_hash, trunk_hash, branch_hash))?;
+  for row in results {
+    let row = row?;
+    let (id_tx, hash, id_trunk, id_branch, height, solid): ResultTuple =
+      mysql::from_row_opt(row)?;
+    let record = FindTransactionsResult {
+      id_tx,
+      id_trunk: id_trunk.unwrap_or(0),
+      id_branch: id_branch.unwrap_or(0),
+      height: height.unwrap_or(0),
+      solid: solid.unwrap_or(0b00),
+    };
+    if hash == current_hash {
+      current_tx = Some(record);
+    } else if hash == trunk_hash {
+      trunk_tx = Some(record);
+    } else if hash == branch_hash {
+      branch_tx = Some(record);
     }
-    Ok((current_tx, trunk_tx, branch_tx))
   }
+  Ok((current_tx, trunk_tx, branch_tx))
 }

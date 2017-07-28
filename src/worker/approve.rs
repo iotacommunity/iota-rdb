@@ -1,32 +1,25 @@
 use mysql;
-use query::{ApproveTransaction, FindTransaction, InsertEvent, UpdateBundle};
+use query::{self, event};
 use utils;
 use worker::Result;
 
 pub type ApproveVec = Vec<u64>;
 
-pub struct Approve<'a> {
-  find_transaction_query: FindTransaction<'a>,
-  approve_transaction_query: ApproveTransaction<'a>,
-  update_bundle_query: UpdateBundle<'a>,
-  insert_event_query: InsertEvent<'a>,
+pub struct Approve {
+  conn: mysql::Conn,
 }
 
-impl<'a> Approve<'a> {
-  pub fn new(pool: &mysql::Pool) -> Result<Self> {
-    Ok(Self {
-      find_transaction_query: FindTransaction::new(pool)?,
-      approve_transaction_query: ApproveTransaction::new(pool)?,
-      update_bundle_query: UpdateBundle::new(pool)?,
-      insert_event_query: InsertEvent::new(pool)?,
-    })
+impl Approve {
+  pub fn new(mysql_uri: &str) -> Result<Self> {
+    let conn = mysql::Conn::new(mysql_uri)?;
+    Ok(Self { conn })
   }
 
   pub fn perform(&mut self, mut nodes: ApproveVec) -> Result<()> {
     let (timestamp, mut counter) = (utils::milliseconds_since_epoch()?, 0);
     nodes.dedup();
     while let Some(id) = nodes.pop() {
-      let record = self.find_transaction_query.exec(id)?;
+      let record = query::find_transaction(&mut self.conn, id)?;
       if record.mst_a {
         continue;
       }
@@ -38,16 +31,14 @@ impl<'a> Approve<'a> {
       }
       if let Some(0) = record.current_idx {
         if let Some(id_bundle) = record.id_bundle {
-          self.update_bundle_query.exec(id_bundle, timestamp)?;
+          query::update_bundle(&mut self.conn, id_bundle, timestamp)?;
         }
       }
-      self.approve_transaction_query.exec(id)?;
+      query::approve_transaction(&mut self.conn, id)?;
       counter += 1;
     }
     if counter > 0 {
-      self
-        .insert_event_query
-        .subtanble_confirmation(timestamp, counter)?;
+      event::subtanble_confirmation(&mut self.conn, timestamp, counter)?;
     }
     Ok(())
   }

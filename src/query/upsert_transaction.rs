@@ -1,13 +1,6 @@
 use counters::Counters;
 use mysql;
 use query::Result;
-use std::sync::Arc;
-
-pub struct UpsertTransaction<'a> {
-  counters: Arc<Counters>,
-  insert_stmt: mysql::Stmt<'a>,
-  update_stmt: mysql::Stmt<'a>,
-}
 
 pub struct UpsertTransactionRecord<'a> {
   pub hash: &'a str,
@@ -26,60 +19,51 @@ pub struct UpsertTransactionRecord<'a> {
   pub solid: u8,
 }
 
-impl<'a> UpsertTransaction<'a> {
-  pub fn new(pool: &mysql::Pool, counters: Arc<Counters>) -> Result<Self> {
-    Ok(Self {
-      counters,
-      insert_stmt: pool.prepare(
-        r#"
-          INSERT INTO tx (
-            id_tx, hash, id_trunk, id_branch, id_address, id_bundle, tag, value,
-            timestamp, current_idx, last_idx, height, is_mst, mst_a, solid
-          ) VALUES (
-            :id_tx, :hash, :id_trunk, :id_branch, :id_address, :id_bundle, :tag,
-            :value, :timestamp, :current_idx, :last_idx, :height, :is_mst,
-            :mst_a, :solid
-          )
-        "#,
-      )?,
-      update_stmt: pool.prepare(
-        r#"
-          UPDATE tx SET
-            id_trunk = :id_trunk,
-            id_branch = :id_branch,
-            id_address = :id_address,
-            id_bundle = :id_bundle,
-            tag = :tag,
-            value = :value,
-            timestamp = :timestamp,
-            current_idx = :current_idx,
-            last_idx = :last_idx,
-            height = :height,
-            is_mst = :is_mst,
-            mst_a = :mst_a,
-            solid = :solid
-          WHERE hash = :hash
-        "#,
-      )?,
-    })
-  }
+const INSERT_QUERY: &str = r#"
+  INSERT INTO tx (
+    id_tx, hash, id_trunk, id_branch, id_address, id_bundle, tag, value,
+    timestamp, current_idx, last_idx, height, is_mst, mst_a, solid
+  ) VALUES (
+    :id_tx, :hash, :id_trunk, :id_branch, :id_address, :id_bundle, :tag,
+    :value, :timestamp, :current_idx, :last_idx, :height, :is_mst,
+    :mst_a, :solid
+  )
+"#;
 
-  pub fn insert(
-    &mut self,
-    transaction: UpsertTransactionRecord,
-  ) -> Result<mysql::QueryResult> {
-    let id_tx = self.counters.next_transaction();
-    let mut params = transaction.to_params();
-    params.push(("id_tx".to_owned(), mysql::Value::from(id_tx)));
-    Ok(self.insert_stmt.execute(params)?)
-  }
+const UPDATE_QUERY: &str = r#"
+  UPDATE tx SET
+    id_trunk = :id_trunk,
+    id_branch = :id_branch,
+    id_address = :id_address,
+    id_bundle = :id_bundle,
+    tag = :tag,
+    value = :value,
+    timestamp = :timestamp,
+    current_idx = :current_idx,
+    last_idx = :last_idx,
+    height = :height,
+    is_mst = :is_mst,
+    mst_a = :mst_a,
+    solid = :solid
+  WHERE hash = :hash
+"#;
 
-  pub fn update(
-    &mut self,
-    transaction: UpsertTransactionRecord,
-  ) -> Result<mysql::QueryResult> {
-    Ok(self.update_stmt.execute(transaction.to_params())?)
-  }
+pub fn insert_transaction<'a>(
+  conn: &'a mut mysql::Transaction,
+  counters: &Counters,
+  transaction: &UpsertTransactionRecord,
+) -> Result<mysql::QueryResult<'a>> {
+  let id_tx = counters.next_transaction();
+  let mut params = transaction.to_params();
+  params.push(("id_tx".to_owned(), mysql::Value::from(id_tx)));
+  Ok(conn.prep_exec(INSERT_QUERY, params)?)
+}
+
+pub fn update_transaction<'a>(
+  conn: &'a mut mysql::Transaction,
+  transaction: &UpsertTransactionRecord,
+) -> Result<mysql::QueryResult<'a>> {
+  Ok(conn.prep_exec(UPDATE_QUERY, transaction.to_params())?)
 }
 
 impl<'a> UpsertTransactionRecord<'a> {

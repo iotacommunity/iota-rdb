@@ -106,9 +106,4 @@ impl<'a> Transaction<'a> {
   pub fn solid(&self) -> u8 {
     self.solid
   }
-
-  pub fn solidate(&mut self, solid: u8) -> &mut Self {
-    self.solid |= solid;
-    self
-  }
 }

@@ -1,5 +1,4 @@
 use counters::Counters;
-use mysql;
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use transaction::Transaction;
@@ -9,7 +8,7 @@ pub struct WritePool<'a> {
   pub write_rx: mpsc::Receiver<String>,
   pub approve_tx: &'a mpsc::Sender<ApproveVec>,
   pub solidate_tx: &'a mpsc::Sender<SolidateVec>,
-  pub pool: &'a mysql::Pool,
+  pub mysql_uri: &'a str,
   pub counters: Arc<Counters>,
   pub milestone_address: &'a str,
   pub milestone_start_index: &'a str,
@@ -22,11 +21,10 @@ impl<'a> WritePool<'a> {
       let write_rx = write_rx.clone();
       let approve_tx = self.approve_tx.clone();
       let solidate_tx = self.solidate_tx.clone();
-      let counters = self.counters.clone();
       let milestone_address = self.milestone_address.to_owned();
       let milestone_start_index = self.milestone_start_index.to_owned();
-      let mut worker =
-        Write::new(self.pool, counters).expect("Worker initialization failure");
+      let mut worker = Write::new(self.mysql_uri, self.counters.clone())
+        .expect("Worker initialization failure");
       thread::spawn(move || loop {
         let message = write_rx
           .lock()
@@ -38,11 +36,11 @@ impl<'a> WritePool<'a> {
           &milestone_address,
           &milestone_start_index,
         ) {
-          Ok(mut transaction) => {
-            match worker.perform(&mut transaction) {
+          Ok(transaction) => {
+            match worker.perform(&transaction, verbose, i) {
               Ok((approve_data, solidate_data)) => {
                 if verbose {
-                  println!("write_thread#{} {:?}", i, transaction);
+                  println!("[w#{}] {:?}", i, transaction.hash());
                 }
                 if let Some(approve_data) = approve_data {
                   approve_tx
@@ -56,12 +54,12 @@ impl<'a> WritePool<'a> {
                 }
               }
               Err(err) => {
-                eprintln!("Transaction processing error: {}", err);
+                eprintln!("[w#{}] Processing error: {}", i, err);
               }
             }
           }
           Err(err) => {
-            eprintln!("Transaction parsing error: {}", err);
+            eprintln!("[w#{}] Parsing error: {}", i, err);
           }
         }
       });

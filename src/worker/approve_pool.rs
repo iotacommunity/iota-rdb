@@ -1,11 +1,10 @@
-use mysql;
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use worker::{Approve, ApproveVec};
 
 pub struct ApprovePool<'a> {
   pub approve_rx: mpsc::Receiver<ApproveVec>,
-  pub pool: &'a mysql::Pool,
+  pub mysql_uri: &'a str,
 }
 
 impl<'a> ApprovePool<'a> {
@@ -14,7 +13,7 @@ impl<'a> ApprovePool<'a> {
     for i in 0..threads_count {
       let approve_rx = approve_rx.clone();
       let mut worker =
-        Approve::new(self.pool).expect("Worker initialization failure");
+        Approve::new(self.mysql_uri).expect("Worker initialization failure");
       thread::spawn(move || loop {
         let vec = approve_rx
           .lock()
@@ -24,11 +23,11 @@ impl<'a> ApprovePool<'a> {
         match worker.perform(vec.clone()) {
           Ok(()) => {
             if verbose {
-              println!("approve_thread#{} {:?}", i, vec);
+              println!("[a#{}] {:?}", i, vec);
             }
           }
           Err(err) => {
-            eprintln!("Transaction approve error: {}", err);
+            eprintln!("[a#{}] Error: {}", i, err);
           }
         }
       });
