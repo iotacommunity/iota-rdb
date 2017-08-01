@@ -10,7 +10,7 @@ const QUERY: &str = r#"
 "#;
 
 pub fn new_transaction_received(
-  conn: &mut mysql::Transaction,
+  conn: &mut mysql::Conn,
   timestamp: f64,
 ) -> Result<()> {
   conn.prep_exec(
@@ -25,7 +25,7 @@ pub fn new_transaction_received(
 }
 
 pub fn milestone_received(
-  conn: &mut mysql::Transaction,
+  conn: &mut mysql::Conn,
   timestamp: f64,
 ) -> Result<()> {
   conn.prep_exec(
@@ -56,7 +56,7 @@ pub fn subtanble_confirmation(
 }
 
 pub fn unsolid_transaction(
-  conn: &mut mysql::Transaction,
+  conn: &mut mysql::Conn,
   timestamp: f64,
 ) -> Result<()> {
   conn.prep_exec(

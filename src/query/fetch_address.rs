@@ -6,7 +6,7 @@ use mysql;
 use query::{Error, Result};
 
 const SELECT_QUERY: &str = r#"
-  SELECT id_address FROM address WHERE address = :address FOR UPDATE
+  SELECT id_address FROM address WHERE address = :address
 "#;
 
 const INSERT_QUERY: &str = r#"
@@ -18,7 +18,7 @@ const INSERT_QUERY: &str = r#"
 "#;
 
 pub fn fetch_address(
-  conn: &mut mysql::Transaction,
+  conn: &mut mysql::Conn,
   counters: &Counters,
   address: &str,
 ) -> Result<u64> {

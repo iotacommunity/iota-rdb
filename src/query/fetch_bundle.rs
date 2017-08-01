@@ -3,7 +3,7 @@ use mysql;
 use query::Result;
 
 const SELECT_QUERY: &str = r#"
-  SELECT id_bundle FROM bundle WHERE bundle = :bundle FOR UPDATE
+  SELECT id_bundle FROM bundle WHERE bundle = :bundle
 "#;
 
 const INSERT_QUERY: &str = r#"
@@ -15,7 +15,7 @@ const INSERT_QUERY: &str = r#"
 "#;
 
 pub fn fetch_bundle(
-  conn: &mut mysql::Transaction,
+  conn: &mut mysql::Conn,
   counters: &Counters,
   created: f64,
   bundle: &str,

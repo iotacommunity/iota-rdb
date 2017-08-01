@@ -11,7 +11,6 @@ const MILESTONE_START_INDEX_TRITS: usize = TAG_LENGTH * TRITS_PER_TRYTE;
 pub struct Args<'a> {
   zmq_uri: &'a str,
   mysql_uri: &'a str,
-  write_threads_count: usize,
   approve_threads_count: usize,
   solidate_threads_count: usize,
   milestone_address: &'a str,
@@ -23,11 +22,6 @@ impl<'a> Args<'a> {
   pub fn parse(matches: &'a ArgMatches<'a>) -> Result<Self> {
     let zmq_uri = matches.value_of("zmq_uri").ok_or(Error::ArgNotFound)?;
     let mysql_uri = matches.value_of("mysql_uri").ok_or(Error::ArgNotFound)?;
-    let write_threads_count = matches
-      .value_of("write_threads_count")
-      .ok_or(Error::ArgNotFound)?
-      .parse()
-      .map_err(Error::WriteThreadsParseInt)?;
     let approve_threads_count = matches
       .value_of("approve_threads_count")
       .ok_or(Error::ArgNotFound)?
@@ -51,7 +45,6 @@ impl<'a> Args<'a> {
     Ok(Self {
       zmq_uri,
       mysql_uri,
-      write_threads_count,
       approve_threads_count,
       solidate_threads_count,
       milestone_address,
@@ -66,10 +59,6 @@ impl<'a> Args<'a> {
 
   pub fn mysql_uri(&self) -> &str {
     self.mysql_uri
-  }
-
-  pub fn write_threads_count(&self) -> usize {
-    self.write_threads_count
   }
 
   pub fn approve_threads_count(&self) -> usize {

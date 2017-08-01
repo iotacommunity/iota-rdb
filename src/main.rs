@@ -23,8 +23,8 @@ mod utils;
 use args::Args;
 use counters::Counters;
 use std::process::exit;
-use std::sync::{Arc, mpsc};
-use worker::{ApprovePool, SolidatePool, WritePool, ZmqReader};
+use std::sync::mpsc;
+use worker::{ApprovePool, MainLoop, SolidatePool};
 
 fn main() {
   let matches = app::build().get_matches();
@@ -41,12 +41,10 @@ fn main() {
     );
   }
 
-  let counters = Arc::new(
-    Counters::new(args.mysql_uri()).expect("MySQL counters failure"),
-  );
+  let counters =
+    Counters::new(args.mysql_uri()).expect("MySQL counters failure");
   let ctx = zmq::Context::new();
   let socket = ctx.socket(zmq::SUB).expect("ZMQ socket create failure");
-  let (write_tx, write_rx) = mpsc::channel();
   let (approve_tx, approve_rx) = mpsc::channel();
   let (solidate_tx, solidate_rx) = mpsc::channel();
 
@@ -58,15 +56,6 @@ fn main() {
     .connect(args.zmq_uri())
     .expect("ZMQ socket connect failure");
   socket.set_subscribe(b"tx ").expect("ZMQ subscribe failure");
-  WritePool {
-    write_rx,
-    approve_tx: &approve_tx,
-    solidate_tx: &solidate_tx,
-    mysql_uri: args.mysql_uri(),
-    counters,
-    milestone_address: args.milestone_address(),
-    milestone_start_index: args.milestone_start_index(),
-  }.run(args.write_threads_count(), args.verbose());
   ApprovePool {
     approve_rx,
     mysql_uri: args.mysql_uri(),
@@ -75,8 +64,13 @@ fn main() {
     solidate_rx,
     mysql_uri: args.mysql_uri(),
   }.run(args.solidate_threads_count(), args.verbose());
-  ZmqReader {
+  MainLoop {
     socket: &socket,
-    tx: &write_tx,
+    approve_tx: &approve_tx,
+    solidate_tx: &solidate_tx,
+    mysql_uri: args.mysql_uri(),
+    counters,
+    milestone_address: args.milestone_address(),
+    milestone_start_index: args.milestone_start_index(),
   }.run(args.verbose());
 }

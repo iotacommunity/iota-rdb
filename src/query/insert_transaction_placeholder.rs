@@ -11,7 +11,7 @@ const QUERY: &str = r#"
 "#;
 
 pub fn insert_transaction_placeholder(
-  conn: &mut mysql::Transaction,
+  conn: &mut mysql::Conn,
   counters: &Counters,
   hash: &str,
   height: i32,

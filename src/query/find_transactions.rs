@@ -24,11 +24,10 @@ const QUERY: &str = r#"
     id_tx, hash, id_trunk, id_branch, height, solid
   FROM tx
   WHERE hash IN (?, ?, ?)
-  FOR UPDATE
 "#;
 
 pub fn find_transactions(
-  conn: &mut mysql::Transaction,
+  conn: &mut mysql::Conn,
   current_hash: &str,
   trunk_hash: &str,
   branch_hash: &str,

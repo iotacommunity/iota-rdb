@@ -49,7 +49,7 @@ const UPDATE_QUERY: &str = r#"
 "#;
 
 pub fn insert_transaction<'a>(
-  conn: &'a mut mysql::Transaction,
+  conn: &'a mut mysql::Conn,
   counters: &Counters,
   transaction: &UpsertTransactionRecord,
 ) -> Result<mysql::QueryResult<'a>> {
@@ -60,7 +60,7 @@ pub fn insert_transaction<'a>(
 }
 
 pub fn update_transaction<'a>(
-  conn: &'a mut mysql::Transaction,
+  conn: &'a mut mysql::Conn,
   transaction: &UpsertTransactionRecord,
 ) -> Result<mysql::QueryResult<'a>> {
   Ok(conn.prep_exec(UPDATE_QUERY, transaction.to_params())?)

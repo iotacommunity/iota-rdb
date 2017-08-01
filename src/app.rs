@@ -24,15 +24,6 @@ pub fn build<'a, 'b>() -> App<'a, 'b> {
         .help("MySQL destination server URI"),
     )
     .arg(
-      Arg::with_name("write_threads_count")
-        .short("w")
-        .long("write-threads")
-        .takes_value(true)
-        .value_name("COUNT")
-        .default_value("1")
-        .help("Count of regular write worker threads"),
-    )
-    .arg(
       Arg::with_name("approve_threads_count")
         .short("a")
         .long("approve-threads")
