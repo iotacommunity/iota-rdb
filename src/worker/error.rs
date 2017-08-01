@@ -8,6 +8,7 @@ pub enum Error {
   Transaction(transaction::Error),
   Query(query::Error),
   SystemTime(time::SystemTimeError),
+  NullHashToTrits,
 }
 
 pub type Result<T> = result::Result<T, Error>;
@@ -18,6 +19,7 @@ impl fmt::Display for Error {
       Error::Transaction(ref err) => write!(f, "Transaction error: {}", err),
       Error::Query(ref err) => write!(f, "Query error: {}", err),
       Error::SystemTime(ref err) => write!(f, "SystemTime error: {}", err),
+      Error::NullHashToTrits => write!(f, "can't convert null_hash to trits"),
     }
   }
 }
@@ -28,6 +30,7 @@ impl error::Error for Error {
       Error::Transaction(ref err) => err.description(),
       Error::Query(ref err) => err.description(),
       Error::SystemTime(ref err) => err.description(),
+      Error::NullHashToTrits => "Can't convert to trits",
     }
   }
 
@@ -36,6 +39,7 @@ impl error::Error for Error {
       Error::Transaction(ref err) => Some(err),
       Error::Query(ref err) => Some(err),
       Error::SystemTime(ref err) => Some(err),
+      Error::NullHashToTrits => None,
     }
   }
 }

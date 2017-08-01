@@ -3,26 +3,33 @@ use mysql;
 use query::{self, event};
 use transaction::Transaction;
 use utils;
-use worker::{ApproveVec, Result, SolidateVec};
+use worker::{ApproveVec, Error, Result, SolidateVec};
 
-const NULL_HASH: &str = "999999999999999999999999999999999999999999999999999999999999999999999999999999999";
+const HASH_SIZE: usize = 81;
 
 pub struct Write {
   conn: mysql::Conn,
   counters: Counters,
+  null_hash: String,
 }
 
 impl Write {
   pub fn new(mysql_uri: &str, counters: Counters) -> Result<Self> {
     let conn = mysql::Conn::new(mysql_uri)?;
-    Ok(Self { conn, counters })
+    let null_hash = utils::trits_string(0, HASH_SIZE)
+      .ok_or(Error::NullHashToTrits)?;
+    Ok(Self {
+      conn,
+      counters,
+      null_hash,
+    })
   }
 
   pub fn perform(
     &mut self,
     transaction: &Transaction,
   ) -> Result<(Option<ApproveVec>, Option<SolidateVec>)> {
-    if transaction.hash() == NULL_HASH {
+    if transaction.hash() == self.null_hash {
       return Ok((None, None));
     }
     let (current_tx, trunk_tx, branch_tx) = query::find_transactions(
@@ -118,7 +125,8 @@ impl Write {
         Ok(record)
       }
       None => {
-        let (height, solid) = (0, if hash == NULL_HASH { 0b11 } else { 0b00 });
+        let height = 0;
+        let solid = if hash == self.null_hash { 0b11 } else { 0b00 };
         let id_tx = query::insert_transaction_placeholder(
           &mut self.conn,
           &self.counters,

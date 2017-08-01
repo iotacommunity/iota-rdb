@@ -2,11 +2,8 @@ mod error;
 
 pub use self::error::{Error, Result};
 use clap::ArgMatches;
-use iota_trytes::{TRITS_PER_TRYTE, trits_to_string};
-use iota_trytes::num::int2trits;
 use transaction::TAG_LENGTH;
-
-const MILESTONE_START_INDEX_TRITS: usize = TAG_LENGTH * TRITS_PER_TRYTE;
+use utils;
 
 pub struct Args<'a> {
   zmq_uri: &'a str,
@@ -35,11 +32,14 @@ impl<'a> Args<'a> {
     let milestone_address = matches
       .value_of("milestone_address")
       .ok_or(Error::ArgNotFound)?;
-    let milestone_start_index = Self::convert_trits(matches
-      .value_of("milestone_start_index")
-      .ok_or(Error::ArgNotFound)?
-      .parse()
-      .map_err(Error::MilestoneStartIndexParseInt)?)?;
+    let milestone_start_index = utils::trits_string(
+      matches
+        .value_of("milestone_start_index")
+        .ok_or(Error::ArgNotFound)?
+        .parse()
+        .map_err(Error::MilestoneStartIndexParseInt)?,
+      TAG_LENGTH,
+    ).ok_or(Error::MilestoneStartIndexToTrits)?;
     let verbose = matches.is_present("VERBOSE");
 
     Ok(Self {
@@ -79,12 +79,5 @@ impl<'a> Args<'a> {
 
   pub fn verbose(&self) -> bool {
     self.verbose
-  }
-
-  fn convert_trits(number: isize) -> Result<String> {
-    let mut trits = [0; MILESTONE_START_INDEX_TRITS];
-    int2trits(number, &mut trits);
-    Ok(trits_to_string(&trits)
-      .ok_or(Error::MilestoneStartIndexToTrits)?)
   }
 }

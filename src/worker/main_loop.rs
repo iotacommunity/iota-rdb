@@ -15,7 +15,7 @@ pub struct MainLoop<'a> {
 }
 
 impl<'a> MainLoop<'a> {
-  pub fn run(self, verbose: bool) {
+  pub fn run(self, verbose: bool) -> ! {
     let mut worker = Write::new(self.mysql_uri, self.counters)
       .expect("Worker initialization failure");
     loop {
