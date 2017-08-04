@@ -24,24 +24,6 @@ pub fn build<'a, 'b>() -> App<'a, 'b> {
         .help("MySQL destination server URI"),
     )
     .arg(
-      Arg::with_name("approve_threads_count")
-        .short("a")
-        .long("approve-threads")
-        .takes_value(true)
-        .value_name("COUNT")
-        .default_value("1")
-        .help("Count of milestone approval worker threads"),
-    )
-    .arg(
-      Arg::with_name("solidate_threads_count")
-        .short("s")
-        .long("solidate-threads")
-        .takes_value(true)
-        .value_name("COUNT")
-        .default_value("1")
-        .help("Count of solidity check worker threads"),
-    )
-    .arg(
       Arg::with_name("milestone_address")
         .short("M")
         .long("milestone-address")

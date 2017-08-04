@@ -69,11 +69,11 @@ fn main() {
   ApprovePool {
     approve_rx,
     mysql_uri: args.mysql_uri(),
-  }.run(args.approve_threads_count(), args.verbose());
+  }.run(args.verbose());
   SolidatePool {
     solidate_rx,
     mysql_uri: args.mysql_uri(),
-  }.run(args.solidate_threads_count(), args.verbose());
+  }.run(args.verbose());
   ZmqReader {
     socket: &socket,
     tx: &write_tx,
