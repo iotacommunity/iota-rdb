@@ -1,5 +1,5 @@
+use super::Result;
 use mysql;
-use query::Result;
 
 pub struct FindChildTransactionsResult {
   pub id_tx: u64,

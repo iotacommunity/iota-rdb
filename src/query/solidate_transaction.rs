@@ -1,5 +1,5 @@
+use super::Result;
 use mysql;
-use query::Result;
 
 const TRUNK_QUERY: &str = r#"
   UPDATE tx SET height = :height, solid = :solid WHERE id_tx = :id_tx

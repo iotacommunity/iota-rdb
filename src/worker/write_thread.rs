@@ -1,4 +1,4 @@
-use counters::Counters;
+use mapper;
 use std::sync::mpsc;
 use std::thread;
 use transaction::Transaction;
@@ -9,7 +9,9 @@ pub struct WriteThread<'a> {
   pub approve_tx: mpsc::Sender<ApproveVec>,
   pub solidate_tx: mpsc::Sender<SolidateVec>,
   pub mysql_uri: &'a str,
-  pub counters: Counters,
+  pub transaction_mapper: mapper::Transaction,
+  pub address_mapper: mapper::Address,
+  pub bundle_mapper: mapper::Bundle,
   pub milestone_address: &'a str,
   pub milestone_start_index: String,
 }
@@ -24,8 +26,12 @@ impl<'a> WriteThread<'a> {
       ..
     } = self;
     let milestone_address = self.milestone_address.to_owned();
-    let mut worker = Write::new(self.mysql_uri, self.counters)
-      .expect("Worker initialization failure");
+    let mut worker = Write::new(
+      self.mysql_uri,
+      self.transaction_mapper,
+      self.address_mapper,
+      self.bundle_mapper,
+    ).expect("Worker initialization failure");
     thread::spawn(move || loop {
       let message = write_rx.recv().expect("Thread communication failure");
       match Transaction::new(

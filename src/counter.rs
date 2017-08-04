@@ -2,13 +2,13 @@ use mysql;
 use std::fmt;
 use std::sync::Mutex;
 
-pub struct Counters {
+pub struct Counter {
   transaction: Mutex<u64>,
   address: Mutex<u64>,
   bundle: Mutex<u64>,
 }
 
-impl Counters {
+impl Counter {
   pub fn new(mysql_uri: &str) -> mysql::Result<Self> {
     let mut conn = mysql::Conn::new(mysql_uri)?;
     let transaction = Self::fetch_counter(
@@ -59,7 +59,7 @@ impl Counters {
   }
 }
 
-impl fmt::Display for Counters {
+impl fmt::Display for Counter {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     write!(
       f,

@@ -1,3 +1,4 @@
+use mapper;
 use mysql;
 use query;
 use std::{error, fmt, result, time};
@@ -7,6 +8,7 @@ use transaction;
 pub enum Error {
   Transaction(transaction::Error),
   Query(query::Error),
+  Mapper(mapper::Error),
   SystemTime(time::SystemTimeError),
   NullHashToTrits,
 }
@@ -18,6 +20,7 @@ impl fmt::Display for Error {
     match *self {
       Error::Transaction(ref err) => write!(f, "Transaction error: {}", err),
       Error::Query(ref err) => write!(f, "Query error: {}", err),
+      Error::Mapper(ref err) => write!(f, "Mapper error: {}", err),
       Error::SystemTime(ref err) => write!(f, "SystemTime error: {}", err),
       Error::NullHashToTrits => write!(f, "can't convert null_hash to trits"),
     }
@@ -29,6 +32,7 @@ impl error::Error for Error {
     match *self {
       Error::Transaction(ref err) => err.description(),
       Error::Query(ref err) => err.description(),
+      Error::Mapper(ref err) => err.description(),
       Error::SystemTime(ref err) => err.description(),
       Error::NullHashToTrits => "Can't convert to trits",
     }
@@ -38,6 +42,7 @@ impl error::Error for Error {
     match *self {
       Error::Transaction(ref err) => Some(err),
       Error::Query(ref err) => Some(err),
+      Error::Mapper(ref err) => Some(err),
       Error::SystemTime(ref err) => Some(err),
       Error::NullHashToTrits => None,
     }
@@ -47,6 +52,12 @@ impl error::Error for Error {
 impl From<query::Error> for Error {
   fn from(err: query::Error) -> Error {
     Error::Query(err)
+  }
+}
+
+impl From<mapper::Error> for Error {
+  fn from(err: mapper::Error) -> Error {
+    Error::Mapper(err)
   }
 }
 

@@ -1,6 +1,6 @@
-use counters::Counters;
+use super::Result;
+use counter::Counter;
 use mysql;
-use query::Result;
 
 pub struct UpsertTransactionRecord<'a> {
   pub hash: &'a str,
@@ -50,10 +50,10 @@ const UPDATE_QUERY: &str = r#"
 
 pub fn insert_transaction<'a>(
   conn: &'a mut mysql::Conn,
-  counters: &Counters,
+  counter: &Counter,
   transaction: &UpsertTransactionRecord,
 ) -> Result<mysql::QueryResult<'a>> {
-  let id_tx = counters.next_transaction();
+  let id_tx = counter.next_transaction();
   let mut params = transaction.to_params();
   params.push(("id_tx".to_owned(), mysql::Value::from(id_tx)));
   Ok(conn.prep_exec(INSERT_QUERY, params)?)

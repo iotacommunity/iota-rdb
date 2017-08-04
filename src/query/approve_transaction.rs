@@ -1,5 +1,5 @@
+use super::Result;
 use mysql;
-use query::Result;
 
 const QUERY: &str = r#"
   UPDATE tx SET mst_a = :mst_a WHERE id_tx = :id_tx

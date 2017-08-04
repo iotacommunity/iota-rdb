@@ -1,5 +1,5 @@
+use super::Result;
 use mysql;
-use query::Result;
 
 #[derive(Clone)]
 pub struct FindTransactionsResult {

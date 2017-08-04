@@ -1,5 +1,5 @@
+use super::{Error, Result};
 use mysql;
-use query::{Error, Result};
 
 pub struct FindTransactionResult {
   pub id_trunk: u64,

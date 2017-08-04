@@ -1,6 +1,6 @@
-use counters::Counters;
+use super::Result;
+use counter::Counter;
 use mysql;
-use query::Result;
 
 const SELECT_QUERY: &str = r#"
   SELECT id_bundle FROM bundle WHERE bundle = :bundle
@@ -16,7 +16,7 @@ const INSERT_QUERY: &str = r#"
 
 pub fn fetch_bundle(
   conn: &mut mysql::Conn,
-  counters: &Counters,
+  counter: &Counter,
   created: f64,
   bundle: &str,
   size: i32,
@@ -27,7 +27,7 @@ pub fn fetch_bundle(
       Ok(id_bundle)
     }
     None => {
-      let id_bundle = counters.next_bundle();
+      let id_bundle = counter.next_bundle();
       conn.prep_exec(
         INSERT_QUERY,
         params!{

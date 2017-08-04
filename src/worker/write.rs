@@ -1,4 +1,4 @@
-use counters::Counters;
+use mapper;
 use mysql;
 use query::{self, event};
 use transaction::Transaction;
@@ -9,18 +9,27 @@ const HASH_SIZE: usize = 81;
 
 pub struct Write {
   conn: mysql::Conn,
-  counters: Counters,
+  transaction_mapper: mapper::Transaction,
+  address_mapper: mapper::Address,
+  bundle_mapper: mapper::Bundle,
   null_hash: String,
 }
 
 impl Write {
-  pub fn new(mysql_uri: &str, counters: Counters) -> Result<Self> {
+  pub fn new(
+    mysql_uri: &str,
+    transaction_mapper: mapper::Transaction,
+    address_mapper: mapper::Address,
+    bundle_mapper: mapper::Bundle,
+  ) -> Result<Self> {
     let conn = mysql::Conn::new(mysql_uri)?;
     let null_hash = utils::trits_string(0, HASH_SIZE)
       .ok_or(Error::NullHashToTrits)?;
     Ok(Self {
       conn,
-      counters,
+      transaction_mapper,
+      address_mapper,
+      bundle_mapper,
       null_hash,
     })
   }
@@ -32,7 +41,7 @@ impl Write {
     if transaction.hash() == self.null_hash {
       return Ok((None, None));
     }
-    let (current_tx, trunk_tx, branch_tx) = query::find_transactions(
+    let (current_tx, trunk_tx, branch_tx) = self.transaction_mapper.find(
       &mut self.conn,
       transaction.hash(),
       transaction.trunk_hash(),
@@ -50,14 +59,11 @@ impl Write {
     } else {
       trunk_tx.clone()
     };
-    let id_address = query::fetch_address(
+    let id_address = self
+      .address_mapper
+      .fetch(&mut self.conn, transaction.address_hash())?;
+    let id_bundle = self.bundle_mapper.fetch(
       &mut self.conn,
-      &self.counters,
-      transaction.address_hash(),
-    )?;
-    let id_bundle = query::fetch_bundle(
-      &mut self.conn,
-      &self.counters,
       timestamp,
       transaction.bundle_hash(),
       transaction.last_index(),
@@ -90,11 +96,9 @@ impl Write {
       height,
       solid,
     };
-    if current_tx.is_none() {
-      query::insert_transaction(&mut self.conn, &self.counters, &record)?;
-    } else {
-      query::update_transaction(&mut self.conn, &record)?;
-    }
+    self
+      .transaction_mapper
+      .upsert(&mut self.conn, &current_tx, record)?;
     if solid != 0b11 {
       event::unsolid_transaction(&mut self.conn, timestamp)?;
     }
@@ -121,19 +125,17 @@ impl Write {
     match transaction {
       Some(record) => {
         let id_tx = record.id_tx;
-        query::direct_approve_transaction(&mut self.conn, id_tx)?;
+        self
+          .transaction_mapper
+          .direct_approve(&mut self.conn, id_tx)?;
         Ok(record)
       }
       None => {
         let height = 0;
         let solid = if hash == self.null_hash { 0b11 } else { 0b00 };
-        let id_tx = query::insert_transaction_placeholder(
-          &mut self.conn,
-          &self.counters,
-          hash,
-          height,
-          solid,
-        )?;
+        let id_tx = self
+          .transaction_mapper
+          .placeholder(&mut self.conn, hash, height, solid)?;
         Ok(query::FindTransactionsResult {
           id_tx,
           height,

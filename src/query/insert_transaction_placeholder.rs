@@ -1,6 +1,6 @@
-use counters::Counters;
+use super::Result;
+use counter::Counter;
 use mysql;
-use query::Result;
 
 const QUERY: &str = r#"
   INSERT INTO tx (
@@ -12,12 +12,12 @@ const QUERY: &str = r#"
 
 pub fn insert_transaction_placeholder(
   conn: &mut mysql::Conn,
-  counters: &Counters,
+  counter: &Counter,
   hash: &str,
   height: i32,
   solid: u8,
 ) -> Result<u64> {
-  let id_tx = counters.next_transaction();
+  let id_tx = counter.next_transaction();
   conn.prep_exec(
     QUERY,
     params!{

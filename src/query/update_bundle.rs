@@ -1,5 +1,5 @@
+use super::Result;
 use mysql;
-use query::Result;
 
 const QUERY: &str = r#"
   UPDATE bundle SET

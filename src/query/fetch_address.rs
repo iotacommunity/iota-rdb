@@ -1,9 +1,9 @@
-use counters::Counters;
+use super::{Error, Result};
+use counter::Counter;
 use iota_curl_cpu::CpuCurl;
 use iota_sign::{trits_checksum, CHECKSUM_LEN};
 use iota_trytes::{char_to_trits, trits_to_string};
 use mysql;
-use query::{Error, Result};
 
 const SELECT_QUERY: &str = r#"
   SELECT id_address FROM address WHERE address = :address
@@ -19,7 +19,7 @@ const INSERT_QUERY: &str = r#"
 
 pub fn fetch_address(
   conn: &mut mysql::Conn,
-  counters: &Counters,
+  counter: &Counter,
   address: &str,
 ) -> Result<u64> {
   match conn
@@ -30,7 +30,7 @@ pub fn fetch_address(
       Ok(id_address)
     }
     None => {
-      let id_address = counters.next_address();
+      let id_address = counter.next_address();
       conn.prep_exec(
         INSERT_QUERY,
         params!{
