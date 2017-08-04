@@ -6,11 +6,11 @@ use transaction::TAG_LENGTH;
 use utils;
 
 pub struct Args<'a> {
-  zmq_uri: &'a str,
-  mysql_uri: &'a str,
-  milestone_address: &'a str,
-  milestone_start_index: String,
-  verbose: bool,
+  pub zmq_uri: &'a str,
+  pub mysql_uri: &'a str,
+  pub milestone_address: &'a str,
+  pub milestone_start_index: String,
+  pub verbose: bool,
 }
 
 impl<'a> Args<'a> {
@@ -37,25 +37,5 @@ impl<'a> Args<'a> {
       milestone_start_index,
       verbose,
     })
-  }
-
-  pub fn zmq_uri(&self) -> &str {
-    self.zmq_uri
-  }
-
-  pub fn mysql_uri(&self) -> &str {
-    self.mysql_uri
-  }
-
-  pub fn milestone_address(&self) -> &str {
-    self.milestone_address
-  }
-
-  pub fn milestone_start_index(&self) -> &str {
-    &self.milestone_start_index
-  }
-
-  pub fn verbose(&self) -> bool {
-    self.verbose
   }
 }

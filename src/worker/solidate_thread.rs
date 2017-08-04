@@ -2,14 +2,14 @@ use std::sync::mpsc;
 use std::thread;
 use worker::{Solidate, SolidateVec};
 
-pub struct SolidatePool<'a> {
+pub struct SolidateThread<'a> {
   pub solidate_rx: mpsc::Receiver<SolidateVec>,
   pub mysql_uri: &'a str,
 }
 
-impl<'a> SolidatePool<'a> {
-  pub fn run(self, verbose: bool) {
-    let solidate_rx = self.solidate_rx;
+impl<'a> SolidateThread<'a> {
+  pub fn spawn(self, verbose: bool) {
+    let Self { solidate_rx, .. } = self;
     let mut worker =
       Solidate::new(self.mysql_uri).expect("Worker initialization failure");
     thread::spawn(move || loop {

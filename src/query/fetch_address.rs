@@ -1,6 +1,6 @@
 use counters::Counters;
 use iota_curl_cpu::CpuCurl;
-use iota_sign::{CHECKSUM_LEN, trits_checksum};
+use iota_sign::{trits_checksum, CHECKSUM_LEN};
 use iota_trytes::{char_to_trits, trits_to_string};
 use mysql;
 use query::{Error, Result};
@@ -23,7 +23,8 @@ pub fn fetch_address(
   address: &str,
 ) -> Result<u64> {
   match conn
-    .first_exec(SELECT_QUERY, params!{"address" => address})? {
+    .first_exec(SELECT_QUERY, params!{"address" => address})?
+  {
     Some(row) => {
       let (id_address,) = mysql::from_row_opt(row)?;
       Ok(id_address)

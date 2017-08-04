@@ -1,5 +1,5 @@
 use mysql;
-use query::{self, FindChildTransactionsResult, event};
+use query::{self, event, FindChildTransactionsResult};
 use utils;
 use worker::Result;
 

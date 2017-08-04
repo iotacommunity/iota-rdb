@@ -2,14 +2,14 @@ use std::sync::mpsc;
 use std::thread;
 use worker::{Approve, ApproveVec};
 
-pub struct ApprovePool<'a> {
+pub struct ApproveThread<'a> {
   pub approve_rx: mpsc::Receiver<ApproveVec>,
   pub mysql_uri: &'a str,
 }
 
-impl<'a> ApprovePool<'a> {
-  pub fn run(self, verbose: bool) {
-    let approve_rx = self.approve_rx;
+impl<'a> ApproveThread<'a> {
+  pub fn spawn(self, verbose: bool) {
+    let Self { approve_rx, .. } = self;
     let mut worker =
       Approve::new(self.mysql_uri).expect("Worker initialization failure");
     thread::spawn(move || loop {

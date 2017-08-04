@@ -1,4 +1,4 @@
-use iota_trytes::{TRITS_PER_TRYTE, trits_to_string};
+use iota_trytes::{trits_to_string, TRITS_PER_TRYTE};
 use iota_trytes::num::int2trits;
 use std::result;
 use std::time::{SystemTime, SystemTimeError, UNIX_EPOCH};
