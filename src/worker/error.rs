@@ -10,7 +10,6 @@ pub enum Error {
   Query(query::Error),
   Mapper(mapper::Error),
   SystemTime(time::SystemTimeError),
-  NullHashToTrits,
 }
 
 pub type Result<T> = result::Result<T, Error>;
@@ -22,7 +21,6 @@ impl fmt::Display for Error {
       Error::Query(ref err) => write!(f, "Query error: {}", err),
       Error::Mapper(ref err) => write!(f, "Mapper error: {}", err),
       Error::SystemTime(ref err) => write!(f, "SystemTime error: {}", err),
-      Error::NullHashToTrits => write!(f, "can't convert null_hash to trits"),
     }
   }
 }
@@ -34,7 +32,6 @@ impl error::Error for Error {
       Error::Query(ref err) => err.description(),
       Error::Mapper(ref err) => err.description(),
       Error::SystemTime(ref err) => err.description(),
-      Error::NullHashToTrits => "Can't convert to trits",
     }
   }
 
@@ -44,7 +41,6 @@ impl error::Error for Error {
       Error::Query(ref err) => Some(err),
       Error::Mapper(ref err) => Some(err),
       Error::SystemTime(ref err) => Some(err),
-      Error::NullHashToTrits => None,
     }
   }
 }

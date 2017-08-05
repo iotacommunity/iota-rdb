@@ -39,7 +39,7 @@ pub fn milestone_received(
   Ok(())
 }
 
-pub fn subtanble_confirmation(
+pub fn subtangle_confirmation(
   conn: &mut mysql::Conn,
   timestamp: f64,
   count: i32,

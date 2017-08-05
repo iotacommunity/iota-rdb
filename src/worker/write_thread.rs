@@ -1,4 +1,4 @@
-use mapper;
+use mapper::{AddressMapper, BundleMapper, TransactionMapper};
 use std::sync::mpsc;
 use std::thread;
 use transaction::Transaction;
@@ -9,9 +9,9 @@ pub struct WriteThread<'a> {
   pub approve_tx: mpsc::Sender<ApproveVec>,
   pub solidate_tx: mpsc::Sender<SolidateVec>,
   pub mysql_uri: &'a str,
-  pub transaction_mapper: mapper::Transaction,
-  pub address_mapper: mapper::Address,
-  pub bundle_mapper: mapper::Bundle,
+  pub transaction_mapper: TransactionMapper,
+  pub address_mapper: AddressMapper,
+  pub bundle_mapper: BundleMapper,
   pub milestone_address: &'a str,
   pub milestone_start_index: String,
 }

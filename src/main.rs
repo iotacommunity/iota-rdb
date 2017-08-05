@@ -23,6 +23,7 @@ mod utils;
 
 use args::Args;
 use counter::Counter;
+use mapper::{AddressMapper, BundleMapper, TransactionMapper};
 use std::process::exit;
 use std::sync::{mpsc, Arc};
 use worker::{ApproveThread, SolidateThread, WriteThread, ZmqLoop};
@@ -45,9 +46,12 @@ fn main() {
   let (approve_tx, approve_rx) = mpsc::channel();
   let (solidate_tx, solidate_rx) = mpsc::channel();
   let counter = Arc::new(Counter::new(mysql_uri).expect("Counter failure"));
-  let transaction_mapper = mapper::Transaction::new(counter.clone());
-  let address_mapper = mapper::Address::new(counter.clone());
-  let bundle_mapper = mapper::Bundle::new(counter.clone());
+  let transaction_mapper = TransactionMapper::new(counter.clone())
+    .expect("Transaction mapper failure");
+  let address_mapper =
+    AddressMapper::new(counter.clone()).expect("Address mapper failure");
+  let bundle_mapper =
+    BundleMapper::new(counter.clone()).expect("Bundle mapper failure");
   let ctx = zmq::Context::new();
   let socket = ctx.socket(zmq::SUB).expect("ZMQ socket create failure");
   socket.connect(zmq_uri).expect("ZMQ socket connect failure");

@@ -38,7 +38,7 @@ impl Approve {
       counter += 1;
     }
     if counter > 0 {
-      event::subtanble_confirmation(&mut self.conn, timestamp, counter)?;
+      event::subtangle_confirmation(&mut self.conn, timestamp, counter)?;
     }
     Ok(())
   }

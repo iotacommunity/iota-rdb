@@ -4,13 +4,13 @@ use mysql;
 use query;
 use std::sync::Arc;
 
-pub struct Address {
+pub struct AddressMapper {
   counter: Arc<Counter>,
 }
 
-impl Address {
-  pub fn new(counter: Arc<Counter>) -> Self {
-    Self { counter }
+impl AddressMapper {
+  pub fn new(counter: Arc<Counter>) -> Result<Self> {
+    Ok(Self { counter })
   }
 
   pub fn fetch(&self, conn: &mut mysql::Conn, address: &str) -> Result<u64> {

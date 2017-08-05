@@ -4,13 +4,13 @@ use mysql;
 use query;
 use std::sync::Arc;
 
-pub struct Bundle {
+pub struct BundleMapper {
   counter: Arc<Counter>,
 }
 
-impl Bundle {
-  pub fn new(counter: Arc<Counter>) -> Self {
-    Self { counter }
+impl BundleMapper {
+  pub fn new(counter: Arc<Counter>) -> Result<Self> {
+    Ok(Self { counter })
   }
 
   pub fn fetch(
