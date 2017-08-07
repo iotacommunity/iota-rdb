@@ -5,38 +5,38 @@ pub use self::error::{Error, Result};
 pub const TAG_LENGTH: usize = 27;
 
 #[derive(Debug)]
-pub struct Transaction<'a> {
-  hash: &'a str,
-  address_hash: &'a str,
+pub struct Message {
+  hash: String,
+  address_hash: String,
   value: i64,
-  tag: &'a str,
+  tag: String,
   timestamp: i64,
   current_index: i32,
   last_index: i32,
-  bundle_hash: &'a str,
-  trunk_hash: &'a str,
-  branch_hash: &'a str,
+  bundle_hash: String,
+  trunk_hash: String,
+  branch_hash: String,
   is_milestone: bool,
   solid: u8,
 }
 
-impl<'a> Transaction<'a> {
-  pub fn new(
-    source: &'a str,
+impl Message {
+  pub fn parse(
+    source: &str,
     milestone_address: &str,
     milestone_start_index: &str,
   ) -> Result<Self> {
-    let chunks: Vec<&'a str> = source.split(' ').collect();
-    let hash = chunks[1];
-    let address_hash = chunks[2];
+    let chunks: Vec<&str> = source.split(' ').collect();
+    let hash = chunks[1].to_owned();
+    let address_hash = chunks[2].to_owned();
     let value = chunks[3].parse()?;
-    let tag = &chunks[4][..TAG_LENGTH];
+    let tag = chunks[4][..TAG_LENGTH].to_owned();
     let timestamp = chunks[5].parse()?;
     let current_index = chunks[6].parse()?;
     let last_index = chunks[7].parse()?;
-    let bundle_hash = chunks[8];
-    let trunk_hash = chunks[9];
-    let branch_hash = chunks[10];
+    let bundle_hash = chunks[8].to_owned();
+    let trunk_hash = chunks[9].to_owned();
+    let branch_hash = chunks[10].to_owned();
     let is_milestone = address_hash == milestone_address;
     let solid = if is_milestone && tag == milestone_start_index {
       0b11
@@ -60,11 +60,11 @@ impl<'a> Transaction<'a> {
   }
 
   pub fn hash(&self) -> &str {
-    self.hash
+    &self.hash
   }
 
   pub fn address_hash(&self) -> &str {
-    self.address_hash
+    &self.address_hash
   }
 
   pub fn value(&self) -> i64 {
@@ -72,7 +72,7 @@ impl<'a> Transaction<'a> {
   }
 
   pub fn tag(&self) -> &str {
-    self.tag
+    &self.tag
   }
 
   pub fn timestamp(&self) -> i64 {
@@ -88,15 +88,15 @@ impl<'a> Transaction<'a> {
   }
 
   pub fn bundle_hash(&self) -> &str {
-    self.bundle_hash
+    &self.bundle_hash
   }
 
   pub fn trunk_hash(&self) -> &str {
-    self.trunk_hash
+    &self.trunk_hash
   }
 
   pub fn branch_hash(&self) -> &str {
-    self.branch_hash
+    &self.branch_hash
   }
 
   pub fn is_milestone(&self) -> bool {

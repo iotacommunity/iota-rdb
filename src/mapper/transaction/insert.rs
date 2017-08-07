@@ -41,9 +41,9 @@ const QUERY: &str = r#"
 "#;
 
 impl Transaction {
-  pub fn insert(&mut self, conn: &mut mysql::Conn, hash: &str) -> Result<()> {
-    let mut params = self.params();
-    params.push(("hash".to_owned(), mysql::Value::from(hash)));
+  pub fn insert(&mut self, conn: &mut mysql::Conn) -> Result<()> {
+    let mut params = self.to_params();
+    params.push(("hash".to_owned(), mysql::Value::from(self.hash())));
     conn.prep_exec(QUERY, params)?;
     self.persistent = true;
     self.modified = false;

@@ -53,7 +53,7 @@ impl Transaction {
         let hash: String = row.take_opt("hash").ok_or(Error::ColumnNotFound)??;
         for (i, input_hash) in hashes.iter().enumerate() {
           if &hash == input_hash {
-            results[i] = Some(Transaction::from_row(&mut row)?);
+            results[i] = Some(Transaction::from_row(&mut row, hash)?);
             break;
           }
         }
@@ -63,10 +63,12 @@ impl Transaction {
     Ok(all_results)
   }
 
-  pub fn from_row(row: &mut mysql::Row) -> Result<Self> {
+  pub fn from_row(row: &mut mysql::Row, hash: String) -> Result<Self> {
     Ok(Self {
+      locked: false,
       persistent: true,
       modified: false,
+      hash,
       id_tx: row.take_opt("id_tx").ok_or(Error::ColumnNotFound)??,
       id_trunk: take_column(row, "id_trunk", 0)?,
       id_branch: take_column(row, "id_branch", 0)?,

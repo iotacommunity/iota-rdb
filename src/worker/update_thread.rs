@@ -4,7 +4,7 @@ use std::thread;
 use std::time::Duration;
 use worker::Update;
 
-const UPDATE_INTERVAL: u64 = 100;
+const UPDATE_INTERVAL: u64 = 500;
 
 pub struct UpdateThread<'a> {
   pub mysql_uri: &'a str,

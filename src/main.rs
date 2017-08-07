@@ -15,7 +15,7 @@ mod macros;
 mod app;
 mod args;
 mod worker;
-mod transaction;
+mod message;
 mod counter;
 mod mapper;
 mod query;
@@ -88,6 +88,7 @@ fn main() {
   let approve_thread = ApproveThread {
     approve_rx,
     mysql_uri,
+    transaction_mapper: transaction_mapper.clone(),
   };
   let solidate_thread = SolidateThread {
     solidate_rx,

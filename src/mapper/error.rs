@@ -4,6 +4,7 @@ use std::{error, fmt, result};
 
 #[derive(Debug)]
 pub enum Error {
+  Locked,
   Query(query::Error),
   ColumnNotFound,
   NullHashToTrits,
@@ -14,9 +15,10 @@ pub type Result<T> = result::Result<T, Error>;
 impl fmt::Display for Error {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match *self {
+      Error::Locked => write!(f, "can't obtain a lock"),
       Error::Query(ref err) => write!(f, "Query error: {}", err),
       Error::ColumnNotFound => write!(f, "Column not found"),
-      Error::NullHashToTrits => write!(f, "can't convert null_hash to trits"),
+      Error::NullHashToTrits => write!(f, "Can't convert null_hash to trits"),
     }
   }
 }
@@ -24,6 +26,7 @@ impl fmt::Display for Error {
 impl error::Error for Error {
   fn description(&self) -> &str {
     match *self {
+      Error::Locked => "Can't obtain a lock",
       Error::Query(ref err) => err.description(),
       Error::ColumnNotFound => "Column not found",
       Error::NullHashToTrits => "Can't convert to trits",
@@ -33,7 +36,7 @@ impl error::Error for Error {
   fn cause(&self) -> Option<&error::Error> {
     match *self {
       Error::Query(ref err) => Some(err),
-      Error::ColumnNotFound | Error::NullHashToTrits => None,
+      Error::Locked | Error::ColumnNotFound | Error::NullHashToTrits => None,
     }
   }
 }
