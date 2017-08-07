@@ -5,6 +5,7 @@ use std::{error, fmt, result};
 #[derive(Debug)]
 pub enum Error {
   Query(query::Error),
+  ColumnNotFound,
   NullHashToTrits,
 }
 
@@ -14,6 +15,7 @@ impl fmt::Display for Error {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match *self {
       Error::Query(ref err) => write!(f, "Query error: {}", err),
+      Error::ColumnNotFound => write!(f, "Column not found"),
       Error::NullHashToTrits => write!(f, "can't convert null_hash to trits"),
     }
   }
@@ -23,6 +25,7 @@ impl error::Error for Error {
   fn description(&self) -> &str {
     match *self {
       Error::Query(ref err) => err.description(),
+      Error::ColumnNotFound => "Column not found",
       Error::NullHashToTrits => "Can't convert to trits",
     }
   }
@@ -30,7 +33,7 @@ impl error::Error for Error {
   fn cause(&self) -> Option<&error::Error> {
     match *self {
       Error::Query(ref err) => Some(err),
-      Error::NullHashToTrits => None,
+      Error::ColumnNotFound | Error::NullHashToTrits => None,
     }
   }
 }

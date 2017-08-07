@@ -1,7 +1,7 @@
 use super::Result;
 use mapper::{AddressMapper, BundleMapper, TransactionMapper};
 use mysql;
-use query::{self, event};
+use query::event;
 use transaction::Transaction;
 use utils;
 use worker::{ApproveVec, SolidateVec};
@@ -34,7 +34,7 @@ impl Write {
     transaction: &Transaction,
   ) -> Result<(Option<ApproveVec>, Option<SolidateVec>)> {
     let (mut approve_data, mut solidate_data) = (None, None);
-    if let Some((current_tx, trunk_tx, branch_tx)) =
+    if let Some((mut current_tx, trunk_tx, branch_tx)) =
       self.transaction_mapper.fetch(
         &mut self.conn,
         transaction.hash(),
@@ -63,25 +63,19 @@ impl Write {
       if branch_tx.solid() == 0b11 {
         solid |= 0b01;
       }
-      let record = query::UpsertTransactionRecord {
-        hash: transaction.hash(),
-        tag: transaction.tag(),
-        value: transaction.value(),
-        timestamp: transaction.timestamp(),
-        current_idx: transaction.current_index(),
-        last_idx: transaction.last_index(),
-        is_mst: transaction.is_milestone(),
-        mst_a: transaction.is_milestone(),
-        id_trunk: trunk_tx.id_tx(),
-        id_branch: branch_tx.id_tx(),
-        id_address,
-        id_bundle,
-        height,
-        solid,
-      };
-      self
-        .transaction_mapper
-        .upsert(&mut self.conn, &current_tx, record)?;
+      current_tx.set_tag(transaction.tag().to_owned());
+      current_tx.set_value(transaction.value());
+      current_tx.set_timestamp(transaction.timestamp());
+      current_tx.set_current_idx(transaction.current_index());
+      current_tx.set_last_idx(transaction.last_index());
+      current_tx.set_is_mst(transaction.is_milestone());
+      current_tx.set_mst_a(transaction.is_milestone());
+      current_tx.set_id_trunk(trunk_tx.id_tx());
+      current_tx.set_id_branch(branch_tx.id_tx());
+      current_tx.set_id_address(id_address);
+      current_tx.set_id_bundle(id_bundle);
+      current_tx.set_height(height);
+      current_tx.set_solid(solid);
       if solid != 0b11 {
         event::unsolid_transaction(&mut self.conn, timestamp)?;
       }
@@ -91,8 +85,11 @@ impl Write {
         approve_data = Some(vec![trunk_tx.id_tx(), branch_tx.id_tx()])
       }
       if solid == 0b11 {
-        solidate_data = current_tx.map(|x| vec![(x.id_tx(), Some(height))]);
+        solidate_data = Some(vec![(current_tx.id_tx(), Some(height))]);
       }
+      self
+        .transaction_mapper
+        .update(&mut self.conn, transaction.hash(), current_tx)?;
     }
     Ok((approve_data, solidate_data))
   }

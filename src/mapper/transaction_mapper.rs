@@ -2,7 +2,6 @@ use super::{Error, Result};
 use counter::Counter;
 use mapper::Transaction;
 use mysql;
-use query;
 use std::collections::HashMap;
 use std::sync::Arc;
 use utils;
@@ -33,68 +32,81 @@ impl TransactionMapper {
     current_hash: &str,
     trunk_hash: &str,
     branch_hash: &str,
-  ) -> Result<Option<(Option<Transaction>, Transaction, Transaction)>> {
-    if current_hash == self.null_hash {
+  ) -> Result<Option<(Transaction, Transaction, Transaction)>> {
+    if current_hash == self.null_hash &&
+      (current_hash == trunk_hash || current_hash == branch_hash)
+    {
       return Ok(None);
     }
-    // TODO check records first
-    let result =
-      query::find_transactions(conn, &[current_hash, trunk_hash, branch_hash])?;
-    let mut iter = result.iter();
-    let current_tx =
-      iter.next().and_then(|x| x.as_ref().map(Transaction::from));
-    let trunk_tx = iter.next().and_then(|x| x.as_ref().map(Transaction::from));
-    let branch_tx = iter.next().and_then(|x| x.as_ref().map(Transaction::from));
-    if let Some(ref record) = current_tx {
-      if record.id_trunk() != 0 && record.id_branch() != 0 {
-        return Ok(None);
+    let mut hashes = vec![current_hash, trunk_hash, branch_hash];
+    let mut results = Vec::new();
+    hashes.sort();
+    hashes.dedup();
+    hashes.retain(|hash| if let Some(record) = self.records.get(*hash) {
+      results.push((*hash, record.clone()));
+      false
+    } else {
+      true
+    });
+    for (result, hash) in
+      Transaction::find(conn, &hashes)?.into_iter().zip(hashes)
+    {
+      if let Some(result) = result {
+        results.push((hash, result));
       }
     }
-    let trunk_tx = self.check_parent(conn, trunk_tx, trunk_hash)?;
-    let branch_tx = if branch_hash != trunk_hash {
-      self.check_parent(conn, branch_tx, branch_hash)?
+    let current_tx = self.fetch_result(&results, current_hash);
+    if current_tx.is_persistent() {
+      return Ok(None);
+    }
+    let mut trunk_tx = self.fetch_result(&results, trunk_hash);
+    trunk_tx.direct_approve();
+    self.store(trunk_hash, trunk_tx.clone());
+    let mut branch_tx;
+    if branch_hash != trunk_hash {
+      branch_tx = self.fetch_result(&results, branch_hash);
+      branch_tx.direct_approve();
+      self.store(branch_hash, branch_tx.clone());
     } else {
-      trunk_tx.clone()
-    };
+      branch_tx = trunk_tx.clone();
+    }
     Ok(Some((current_tx, trunk_tx, branch_tx)))
   }
 
-  pub fn upsert(
-    &self,
-    conn: &mut mysql::Conn,
-    current_tx: &Option<Transaction>,
-    record: query::UpsertTransactionRecord,
-  ) -> Result<()> {
-    if current_tx.is_none() {
-      query::insert_transaction(conn, &self.counter, &record)?;
-      Ok(())
-    } else {
-      query::update_transaction(conn, &record)?;
-      Ok(())
-    }
-  }
-
-  fn check_parent(
+  pub fn update(
     &mut self,
     conn: &mut mysql::Conn,
-    transaction: Option<Transaction>,
     hash: &str,
-  ) -> Result<Transaction> {
-    match transaction {
-      Some(record) => {
-        query::direct_approve_transaction(conn, record.id_tx())?;
-        Ok(record)
+    mut transaction: Transaction,
+  ) -> Result<()> {
+    if transaction.is_modified() {
+      if !transaction.is_persistent() {
+        transaction.insert(conn, hash)?;
       }
-      None => {
+      self.store(hash, transaction);
+    }
+    Ok(())
+  }
+
+  fn store(&mut self, hash: &str, transaction: Transaction) {
+    self.records.insert(hash.to_owned(), transaction);
+  }
+
+  fn fetch_result(
+    &mut self,
+    results: &[(&str, Transaction)],
+    hash: &str,
+  ) -> Transaction {
+    results
+      .iter()
+      .find(|&&(current_hash, _)| current_hash == hash)
+      .map(|&(_, ref result)| result.clone())
+      .unwrap_or_else(|| {
         let id_tx = self.counter.next_transaction();
         let solid = if hash == self.null_hash { 0b11 } else { 0b00 };
-        let record = Transaction::placeholder(id_tx, 0, solid);
-        self
-          .records
-          .entry(hash.to_owned())
-          .or_insert_with(|| record.clone());
-        Ok(record)
-      }
-    }
+        let record = Transaction::placeholder(id_tx, solid);
+        self.store(hash, record.clone());
+        record
+      })
   }
 }
