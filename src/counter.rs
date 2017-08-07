@@ -31,19 +31,19 @@ impl Counter {
   }
 
   pub fn next_transaction(&self) -> u64 {
-    let mut counter = self.transaction.lock().expect("Mutex is poisoned");
+    let mut counter = self.transaction.lock().unwrap();
     *counter += 1;
     *counter
   }
 
   pub fn next_address(&self) -> u64 {
-    let mut counter = self.address.lock().expect("Mutex is poisoned");
+    let mut counter = self.address.lock().unwrap();
     *counter += 1;
     *counter
   }
 
   pub fn next_bundle(&self) -> u64 {
-    let mut counter = self.bundle.lock().expect("Mutex is poisoned");
+    let mut counter = self.bundle.lock().unwrap();
     *counter += 1;
     *counter
   }
@@ -64,9 +64,9 @@ impl fmt::Display for Counter {
     write!(
       f,
       "tx:{}, address:{}, bundle:{}",
-      *self.transaction.lock().expect("Mutex is poisoned"),
-      *self.address.lock().expect("Mutex is poisoned"),
-      *self.bundle.lock().expect("Mutex is poisoned"),
+      *self.transaction.lock().unwrap(),
+      *self.address.lock().unwrap(),
+      *self.bundle.lock().unwrap(),
     )
   }
 }

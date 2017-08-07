@@ -7,14 +7,14 @@ use transaction::Transaction;
 use utils;
 use worker::{ApproveVec, SolidateVec};
 
-pub struct Write {
+pub struct Insert {
   conn: mysql::Conn,
   transaction_mapper: Arc<TransactionMapper>,
   address_mapper: Arc<AddressMapper>,
   bundle_mapper: Arc<BundleMapper>,
 }
 
-impl Write {
+impl Insert {
   pub fn new(
     mysql_uri: &str,
     transaction_mapper: Arc<TransactionMapper>,
@@ -90,7 +90,7 @@ impl Write {
       }
       self
         .transaction_mapper
-        .update(&mut self.conn, transaction.hash(), current_tx)?;
+        .insert(&mut self.conn, transaction.hash(), current_tx)?;
     }
     Ok((approve_data, solidate_data))
   }

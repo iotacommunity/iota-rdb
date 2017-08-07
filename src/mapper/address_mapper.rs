@@ -17,7 +17,7 @@ impl AddressMapper {
     Ok(query::fetch_address(conn, &self.counter, address)?)
   }
 
-  pub fn flush(&self, _conn: &mut mysql::Conn) -> Result<()> {
+  pub fn update(&self, _conn: &mut mysql::Conn) -> Result<()> {
     Ok(())
   }
 }

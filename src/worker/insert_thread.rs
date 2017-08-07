@@ -2,10 +2,10 @@ use mapper::{AddressMapper, BundleMapper, TransactionMapper};
 use std::sync::{mpsc, Arc};
 use std::thread;
 use transaction::Transaction;
-use worker::{ApproveVec, SolidateVec, Write};
+use worker::{ApproveVec, Insert, SolidateVec};
 
-pub struct WriteThread<'a> {
-  pub write_rx: mpsc::Receiver<String>,
+pub struct InsertThread<'a> {
+  pub insert_rx: mpsc::Receiver<String>,
   pub approve_tx: mpsc::Sender<ApproveVec>,
   pub solidate_tx: mpsc::Sender<SolidateVec>,
   pub mysql_uri: &'a str,
@@ -16,24 +16,24 @@ pub struct WriteThread<'a> {
   pub milestone_start_index: String,
 }
 
-impl<'a> WriteThread<'a> {
+impl<'a> InsertThread<'a> {
   pub fn spawn(self, verbose: bool) {
     let Self {
-      write_rx,
+      insert_rx,
       approve_tx,
       solidate_tx,
       milestone_start_index,
       ..
     } = self;
     let milestone_address = self.milestone_address.to_owned();
-    let mut worker = Write::new(
+    let mut worker = Insert::new(
       self.mysql_uri,
       self.transaction_mapper,
       self.address_mapper,
       self.bundle_mapper,
     ).expect("Worker initialization failure");
     thread::spawn(move || loop {
-      let message = write_rx.recv().expect("Thread communication failure");
+      let message = insert_rx.recv().expect("Thread communication failure");
       match Transaction::new(
         &message,
         &milestone_address,
@@ -42,7 +42,7 @@ impl<'a> WriteThread<'a> {
         Ok(transaction) => match worker.perform(&transaction) {
           Ok((approve_data, solidate_data)) => {
             if verbose {
-              println!("[rdb] {}", transaction.hash());
+              println!("[ins] {}", transaction.hash());
             }
             if let Some(approve_data) = approve_data {
               approve_tx
@@ -56,11 +56,11 @@ impl<'a> WriteThread<'a> {
             }
           }
           Err(err) => {
-            eprintln!("[rdb] Processing error: {}", err);
+            eprintln!("[ins] Processing error: {}", err);
           }
         },
         Err(err) => {
-          eprintln!("[rdb] Parsing error: {}", err);
+          eprintln!("[ins] Parsing error: {}", err);
         }
       }
     });

@@ -3,14 +3,14 @@ use mapper::{AddressMapper, BundleMapper, TransactionMapper};
 use mysql;
 use std::sync::Arc;
 
-pub struct Flush {
+pub struct Update {
   conn: mysql::Conn,
   transaction_mapper: Arc<TransactionMapper>,
   address_mapper: Arc<AddressMapper>,
   bundle_mapper: Arc<BundleMapper>,
 }
 
-impl Flush {
+impl Update {
   pub fn new(
     mysql_uri: &str,
     transaction_mapper: Arc<TransactionMapper>,
@@ -27,9 +27,9 @@ impl Flush {
   }
 
   pub fn perform(&mut self) -> Result<()> {
-    self.transaction_mapper.flush(&mut self.conn)?;
-    self.address_mapper.flush(&mut self.conn)?;
-    self.bundle_mapper.flush(&mut self.conn)?;
+    self.transaction_mapper.update(&mut self.conn)?;
+    self.address_mapper.update(&mut self.conn)?;
+    self.bundle_mapper.update(&mut self.conn)?;
     Ok(())
   }
 }

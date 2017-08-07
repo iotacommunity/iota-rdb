@@ -3,7 +3,7 @@ use zmq;
 
 pub struct ZmqLoop {
   pub socket: zmq::Socket,
-  pub write_tx: mpsc::Sender<String>,
+  pub insert_tx: mpsc::Sender<String>,
 }
 
 impl ZmqLoop {
@@ -15,7 +15,7 @@ impl ZmqLoop {
             println!("[zmq] {}", string);
           }
           self
-            .write_tx
+            .insert_tx
             .send(string)
             .expect("Thread communication failure");
         }

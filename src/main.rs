@@ -26,7 +26,8 @@ use counter::Counter;
 use mapper::{AddressMapper, BundleMapper, TransactionMapper};
 use std::process::exit;
 use std::sync::{mpsc, Arc};
-use worker::{ApproveThread, FlushThread, SolidateThread, WriteThread, ZmqLoop};
+use worker::{ApproveThread, InsertThread, SolidateThread, UpdateThread,
+             ZmqLoop};
 
 fn main() {
   let matches = app::build().get_matches();
@@ -42,7 +43,7 @@ fn main() {
     verbose,
   } = args;
 
-  let (write_tx, write_rx) = mpsc::channel();
+  let (insert_tx, insert_rx) = mpsc::channel();
   let (approve_tx, approve_rx) = mpsc::channel();
   let (solidate_tx, solidate_rx) = mpsc::channel();
   let counter = Arc::new(Counter::new(mysql_uri).expect("Counter failure"));
@@ -67,8 +68,8 @@ fn main() {
     println!("Highest ids: {}", counter);
   }
 
-  let write_thread = WriteThread {
-    write_rx,
+  let insert_thread = InsertThread {
+    insert_rx,
     approve_tx,
     solidate_tx,
     mysql_uri,
@@ -78,7 +79,7 @@ fn main() {
     milestone_address,
     milestone_start_index,
   };
-  let flush_thread = FlushThread {
+  let update_thread = UpdateThread {
     mysql_uri,
     transaction_mapper: transaction_mapper.clone(),
     address_mapper: address_mapper.clone(),
@@ -92,10 +93,10 @@ fn main() {
     solidate_rx,
     mysql_uri,
   };
-  let zmq_loop = ZmqLoop { socket, write_tx };
+  let zmq_loop = ZmqLoop { socket, insert_tx };
 
-  write_thread.spawn(verbose);
-  flush_thread.spawn(verbose);
+  insert_thread.spawn(verbose);
+  update_thread.spawn(verbose);
   approve_thread.spawn(verbose);
   solidate_thread.spawn(verbose);
   zmq_loop.run(verbose);
