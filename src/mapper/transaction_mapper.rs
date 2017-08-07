@@ -3,20 +3,20 @@ use counter::Counter;
 use mapper::Transaction;
 use mysql;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use utils;
 
 const HASH_SIZE: usize = 81;
 
 pub struct TransactionMapper {
   counter: Arc<Counter>,
-  records: HashMap<String, Transaction>,
+  records: Mutex<HashMap<String, Transaction>>,
   null_hash: String,
 }
 
 impl TransactionMapper {
   pub fn new(counter: Arc<Counter>) -> Result<Self> {
-    let records = HashMap::new();
+    let records = Mutex::new(HashMap::new());
     let null_hash = utils::trits_string(0, HASH_SIZE)
       .ok_or(Error::NullHashToTrits)?;
     Ok(Self {
@@ -27,7 +27,7 @@ impl TransactionMapper {
   }
 
   pub fn fetch(
-    &mut self,
+    &self,
     conn: &mut mysql::Conn,
     current_hash: &str,
     trunk_hash: &str,
@@ -38,16 +38,8 @@ impl TransactionMapper {
     {
       return Ok(None);
     }
-    let mut hashes = vec![current_hash, trunk_hash, branch_hash];
     let mut results = Vec::new();
-    hashes.sort();
-    hashes.dedup();
-    hashes.retain(|hash| if let Some(record) = self.records.get(*hash) {
-      results.push((*hash, record.clone()));
-      false
-    } else {
-      true
-    });
+    let hashes = self.absent_hashes(current_hash, trunk_hash, branch_hash);
     for (result, hash) in
       Transaction::find(conn, &hashes)?.into_iter().zip(hashes)
     {
@@ -55,45 +47,83 @@ impl TransactionMapper {
         results.push((hash, result));
       }
     }
-    let current_tx = self.fetch_result(&results, current_hash);
+    let current_tx = self.fetch_current(&results, current_hash);
     if current_tx.is_persistent() {
       return Ok(None);
     }
-    let mut trunk_tx = self.fetch_result(&results, trunk_hash);
-    trunk_tx.direct_approve();
-    self.store(trunk_hash, trunk_tx.clone());
-    let mut branch_tx;
-    if branch_hash != trunk_hash {
-      branch_tx = self.fetch_result(&results, branch_hash);
-      branch_tx.direct_approve();
-      self.store(branch_hash, branch_tx.clone());
+    let trunk_tx = self.fetch_parent(&results, trunk_hash);
+    let branch_tx = if branch_hash != trunk_hash {
+      self.fetch_parent(&results, branch_hash)
     } else {
-      branch_tx = trunk_tx.clone();
-    }
+      trunk_tx.clone()
+    };
     Ok(Some((current_tx, trunk_tx, branch_tx)))
   }
 
   pub fn update(
-    &mut self,
+    &self,
     conn: &mut mysql::Conn,
     hash: &str,
-    mut transaction: Transaction,
+    mut record: Transaction,
   ) -> Result<()> {
-    if transaction.is_modified() {
-      if !transaction.is_persistent() {
-        transaction.insert(conn, hash)?;
+    if record.is_modified() {
+      if !record.is_persistent() {
+        record.insert(conn, hash)?;
       }
-      self.store(hash, transaction);
+      let mut records = self.records.lock().expect("Mutex is poisoned");
+      records.insert(hash.to_owned(), record);
     }
     Ok(())
   }
 
-  fn store(&mut self, hash: &str, transaction: Transaction) {
-    self.records.insert(hash.to_owned(), transaction);
+  pub fn flush(&self, conn: &mut mysql::Conn) -> Result<()> {
+    let mut records = self.records.lock().expect("Mutex is poisoned");
+    for record in records.values_mut() {
+      if record.is_modified() {
+        record.update(conn)?;
+      }
+    }
+    Ok(())
+  }
+
+  fn absent_hashes<'a>(
+    &self,
+    current_hash: &'a str,
+    trunk_hash: &'a str,
+    branch_hash: &'a str,
+  ) -> Vec<&'a str> {
+    let records = self.records.lock().expect("Mutex is poisoned");
+    let mut hashes = vec![current_hash, trunk_hash, branch_hash];
+    hashes.sort();
+    hashes.dedup();
+    hashes.retain(|hash| records.contains_key(*hash));
+    hashes
+  }
+
+  fn fetch_current(
+    &self,
+    results: &[(&str, Transaction)],
+    hash: &str,
+  ) -> Transaction {
+    let records = self.records.lock().expect("Mutex is poisoned");
+    self.fetch_result(&records, results, hash)
+  }
+
+  fn fetch_parent(
+    &self,
+    results: &[(&str, Transaction)],
+    hash: &str,
+  ) -> Transaction {
+    let mut records = self.records.lock().expect("Mutex is poisoned");
+    let mut record = self.fetch_result(&records, results, hash);
+    record.direct_approve();
+    records.insert(hash.to_owned(), record.clone());
+    record
   }
 
   fn fetch_result(
-    &mut self,
+    &self,
+    records: &HashMap<String, Transaction>,
     results: &[(&str, Transaction)],
     hash: &str,
   ) -> Transaction {
@@ -102,11 +132,16 @@ impl TransactionMapper {
       .find(|&&(current_hash, _)| current_hash == hash)
       .map(|&(_, ref result)| result.clone())
       .unwrap_or_else(|| {
-        let id_tx = self.counter.next_transaction();
-        let solid = if hash == self.null_hash { 0b11 } else { 0b00 };
-        let record = Transaction::placeholder(id_tx, solid);
-        self.store(hash, record.clone());
-        record
+        records
+          .get(hash)
+          .cloned()
+          .unwrap_or_else(|| self.create_placeholder(hash))
       })
+  }
+
+  fn create_placeholder(&self, hash: &str) -> Transaction {
+    let id_tx = self.counter.next_transaction();
+    let solid = if hash == self.null_hash { 0b11 } else { 0b00 };
+    Transaction::placeholder(id_tx, solid)
   }
 }

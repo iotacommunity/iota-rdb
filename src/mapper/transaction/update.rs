@@ -22,8 +22,9 @@ const QUERY: &str = r#"
 "#;
 
 impl Transaction {
-  pub fn update(&self, conn: &mut mysql::Conn) -> Result<()> {
+  pub fn update(&mut self, conn: &mut mysql::Conn) -> Result<()> {
     conn.prep_exec(QUERY, self.params())?;
+    self.modified = false;
     Ok(())
   }
 }

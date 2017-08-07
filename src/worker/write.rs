@@ -2,23 +2,24 @@ use super::Result;
 use mapper::{AddressMapper, BundleMapper, TransactionMapper};
 use mysql;
 use query::event;
+use std::sync::Arc;
 use transaction::Transaction;
 use utils;
 use worker::{ApproveVec, SolidateVec};
 
 pub struct Write {
   conn: mysql::Conn,
-  transaction_mapper: TransactionMapper,
-  address_mapper: AddressMapper,
-  bundle_mapper: BundleMapper,
+  transaction_mapper: Arc<TransactionMapper>,
+  address_mapper: Arc<AddressMapper>,
+  bundle_mapper: Arc<BundleMapper>,
 }
 
 impl Write {
   pub fn new(
     mysql_uri: &str,
-    transaction_mapper: TransactionMapper,
-    address_mapper: AddressMapper,
-    bundle_mapper: BundleMapper,
+    transaction_mapper: Arc<TransactionMapper>,
+    address_mapper: Arc<AddressMapper>,
+    bundle_mapper: Arc<BundleMapper>,
   ) -> Result<Self> {
     let conn = mysql::Conn::new(mysql_uri)?;
     Ok(Self {
@@ -52,11 +53,11 @@ impl Write {
         transaction.last_index(),
       )?;
       let mut solid = transaction.solid();
-      let height = if solid != 0b11 && trunk_tx.solid() == 0b11 {
+      current_tx.set_height(if solid != 0b11 && trunk_tx.solid() == 0b11 {
         trunk_tx.height() + 1
       } else {
         0
-      };
+      });
       if trunk_tx.solid() == 0b11 {
         solid |= 0b10;
       }
@@ -74,9 +75,8 @@ impl Write {
       current_tx.set_id_branch(branch_tx.id_tx());
       current_tx.set_id_address(id_address);
       current_tx.set_id_bundle(id_bundle);
-      current_tx.set_height(height);
       current_tx.set_solid(solid);
-      if solid != 0b11 {
+      if current_tx.solid() != 0b11 {
         event::unsolid_transaction(&mut self.conn, timestamp)?;
       }
       event::new_transaction_received(&mut self.conn, timestamp)?;
@@ -84,8 +84,9 @@ impl Write {
         event::milestone_received(&mut self.conn, timestamp)?;
         approve_data = Some(vec![trunk_tx.id_tx(), branch_tx.id_tx()])
       }
-      if solid == 0b11 {
-        solidate_data = Some(vec![(current_tx.id_tx(), Some(height))]);
+      if current_tx.solid() == 0b11 {
+        solidate_data =
+          Some(vec![(current_tx.id_tx(), Some(current_tx.height()))]);
       }
       self
         .transaction_mapper

@@ -46,6 +46,7 @@ impl Transaction {
     params.push(("hash".to_owned(), mysql::Value::from(hash)));
     conn.prep_exec(QUERY, params)?;
     self.persistent = true;
+    self.modified = false;
     Ok(())
   }
 }

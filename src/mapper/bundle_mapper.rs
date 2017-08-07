@@ -28,4 +28,8 @@ impl BundleMapper {
       size,
     )?)
   }
+
+  pub fn flush(&self, _conn: &mut mysql::Conn) -> Result<()> {
+    Ok(())
+  }
 }
