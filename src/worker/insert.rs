@@ -36,7 +36,7 @@ impl Insert {
     message: &Message,
   ) -> Result<(Option<ApproveVec>, Option<SolidateVec>)> {
     let (mut approve_data, mut solidate_data) = (None, None);
-    let txs = self.transaction_mapper.fetch(
+    let txs = self.transaction_mapper.fetch_triplet(
       &mut self.conn,
       message.hash(),
       message.trunk_hash(),

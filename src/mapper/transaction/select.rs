@@ -23,52 +23,54 @@ const QUERY_BASE: &str = r#"
   FROM tx
 "#;
 
-const QUERY_ONE: &str = r"WHERE hash = ?";
-const QUERY_TWO: &str = r"WHERE hash IN (?, ?)";
-const QUERY_THREE: &str = r"WHERE hash IN (?, ?, ?)";
+const WHERE_ID: &str = r"WHERE id_tx = ?";
+const WHERE_HASH_ONE: &str = r"WHERE hash = ?";
+const WHERE_HASH_TWO: &str = r"WHERE hash IN (?, ?)";
+const WHERE_HASH_THREE: &str = r"WHERE hash IN (?, ?, ?)";
 
 impl Transaction {
-  pub fn find(
-    conn: &mut mysql::Conn,
-    hashes: &[&str],
-  ) -> Result<Vec<Option<Transaction>>> {
-    let mut all_results = Vec::new();
-    for hashes in hashes.chunks(3) {
-      let mut results = vec![None; hashes.len()];
-      let rows = match hashes.len() {
-        1 => conn
-          .prep_exec(format!("{} {}", QUERY_BASE, QUERY_ONE), (hashes[0],))?,
-        2 => conn.prep_exec(
-          format!("{} {}", QUERY_BASE, QUERY_TWO),
-          (hashes[0], hashes[1]),
-        )?,
-        3 => conn.prep_exec(
-          format!("{} {}", QUERY_BASE, QUERY_THREE),
-          (hashes[0], hashes[1], hashes[2]),
-        )?,
-        _ => unreachable!(),
-      };
-      for row in rows {
-        let mut row = row?;
-        let hash: String = row.take_opt("hash").ok_or(Error::ColumnNotFound)??;
-        for (i, input_hash) in hashes.iter().enumerate() {
-          if &hash == input_hash {
-            results[i] = Some(Transaction::from_row(&mut row, hash)?);
-            break;
-          }
-        }
-      }
-      all_results.extend(results);
-    }
-    Ok(all_results)
+  pub fn find_by_id(conn: &mut mysql::Conn, id: u64) -> Result<Transaction> {
+    Ok(conn
+      .first_exec(format!("{} {}", QUERY_BASE, WHERE_ID), (id,))?
+      .ok_or(Error::RecordNotFound)
+      .and_then(|mut row| Transaction::from_row(&mut row))?)
   }
 
-  pub fn from_row(row: &mut mysql::Row, hash: String) -> Result<Self> {
+  pub fn find_by_hashes(
+    conn: &mut mysql::Conn,
+    hashes: &[&str],
+  ) -> Result<Vec<Transaction>> {
+    let mut results = Vec::new();
+    for hashes in hashes.chunks(3) {
+      let rows =
+        match hashes.len() {
+          1 => conn.prep_exec(
+            format!("{} {}", QUERY_BASE, WHERE_HASH_ONE),
+            (hashes[0],),
+          )?,
+          2 => conn.prep_exec(
+            format!("{} {}", QUERY_BASE, WHERE_HASH_TWO),
+            (hashes[0], hashes[1]),
+          )?,
+          3 => conn.prep_exec(
+            format!("{} {}", QUERY_BASE, WHERE_HASH_THREE),
+            (hashes[0], hashes[1], hashes[2]),
+          )?,
+          _ => unreachable!(),
+        };
+      for row in rows {
+        results.push(Transaction::from_row(&mut row?)?);
+      }
+    }
+    Ok(results)
+  }
+
+  pub fn from_row(row: &mut mysql::Row) -> Result<Self> {
     Ok(Self {
       locked: false,
       persistent: true,
       modified: false,
-      hash,
+      hash: row.take_opt("hash").ok_or(Error::ColumnNotFound)??,
       id_tx: row.take_opt("id_tx").ok_or(Error::ColumnNotFound)??,
       id_trunk: take_column(row, "id_trunk", 0)?,
       id_branch: take_column(row, "id_branch", 0)?,

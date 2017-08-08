@@ -89,6 +89,7 @@ fn main() {
     approve_rx,
     mysql_uri,
     transaction_mapper: transaction_mapper.clone(),
+    bundle_mapper: bundle_mapper.clone(),
   };
   let solidate_thread = SolidateThread {
     solidate_rx,

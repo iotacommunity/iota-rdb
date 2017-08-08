@@ -1,32 +1,64 @@
 use super::{Error, Result};
 use counter::Counter;
-use mapper::Transaction;
+use mapper::{Record, RecordGuard, Transaction};
 use mysql;
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::collections::hash_map::{Entry, HashMap};
+use std::sync::{Arc, Mutex, MutexGuard};
 use utils;
 
 const HASH_SIZE: usize = 81;
 
+type Data = (HashMap<u64, Transaction>, HashMap<String, u64>);
+
 pub struct TransactionMapper {
   counter: Arc<Counter>,
-  records: Mutex<(HashMap<u64, Transaction>, HashMap<String, u64>)>,
+  data: Mutex<Data>,
   null_hash: String,
 }
 
 impl TransactionMapper {
   pub fn new(counter: Arc<Counter>) -> Result<Self> {
-    let records = Mutex::new((HashMap::new(), HashMap::new()));
+    let data = Mutex::new((HashMap::new(), HashMap::new()));
     let null_hash = utils::trits_string(0, HASH_SIZE)
       .ok_or(Error::NullHashToTrits)?;
     Ok(Self {
       counter,
-      records,
+      data,
       null_hash,
     })
   }
 
-  pub fn fetch(
+  pub fn lock(&self) -> MutexGuard<Data> {
+    self.data.lock().unwrap()
+  }
+
+  pub fn fetch<'a>(
+    &self,
+    guard: &'a mut MutexGuard<Data>,
+    conn: &mut mysql::Conn,
+    id: u64,
+  ) -> Result<RecordGuard<'a, Transaction>> {
+    let (ref mut records, _) = **guard;
+    let record = match records.entry(id) {
+      Entry::Occupied(entry) => {
+        let mut record = entry.into_mut();
+        if record.is_locked() {
+          return Err(Error::Locked);
+        } else {
+          record.lock();
+          record
+        }
+      }
+      Entry::Vacant(entry) => {
+        let mut record = Transaction::find_by_id(conn, id)?;
+        record.lock();
+        entry.insert(record)
+      }
+    };
+    Ok(RecordGuard::new(record))
+  }
+
+  pub fn fetch_triplet(
     &self,
     conn: &mut mysql::Conn,
     current_hash: &str,
@@ -38,16 +70,9 @@ impl TransactionMapper {
     {
       return Ok(None);
     }
-    let mut results = Vec::new();
     let hashes = self.absent_hashes(current_hash, trunk_hash, branch_hash);
-    for (result, hash) in
-      Transaction::find(conn, &hashes)?.into_iter().zip(hashes)
-    {
-      if let Some(result) = result {
-        results.push((hash, result));
-      }
-    }
-    self.fetch_results(&results, current_hash, trunk_hash, branch_hash)
+    let results = Transaction::find_by_hashes(conn, &hashes)?;
+    self.fetch_triplet_results(&results, current_hash, trunk_hash, branch_hash)
   }
 
   pub fn insert(
@@ -57,7 +82,7 @@ impl TransactionMapper {
     mut trunk_tx: Transaction,
     mut branch_tx: Transaction,
   ) -> Result<()> {
-    let (ref mut records, _) = *self.records.lock().unwrap();
+    let (ref mut records, _) = *self.data.lock().unwrap();
     current_tx.insert(conn)?;
     current_tx.unlock();
     trunk_tx.unlock();
@@ -69,7 +94,7 @@ impl TransactionMapper {
   }
 
   pub fn update(&self, conn: &mut mysql::Conn) -> Result<()> {
-    let (ref mut records, _) = *self.records.lock().unwrap();
+    let (ref mut records, _) = *self.data.lock().unwrap();
     for record in records.values_mut() {
       if record.is_modified() {
         record.update(conn)?;
@@ -84,7 +109,7 @@ impl TransactionMapper {
     trunk_hash: &'a str,
     branch_hash: &'a str,
   ) -> Vec<&'a str> {
-    let (_, ref hashes) = *self.records.lock().unwrap();
+    let (_, ref hashes) = *self.data.lock().unwrap();
     let mut result = vec![current_hash, trunk_hash, branch_hash];
     result.sort();
     result.dedup();
@@ -92,14 +117,14 @@ impl TransactionMapper {
     result
   }
 
-  fn fetch_results(
+  fn fetch_triplet_results(
     &self,
-    results: &[(&str, Transaction)],
+    results: &[Transaction],
     current_hash: &str,
     trunk_hash: &str,
     branch_hash: &str,
   ) -> Result<Option<(Transaction, Transaction, Transaction)>> {
-    let (ref mut records, ref mut hashes) = *self.records.lock().unwrap();
+    let (ref mut records, ref mut hashes) = *self.data.lock().unwrap();
     let mut current_tx =
       self.fetch_result(records, hashes, results, current_hash);
     if current_tx.is_persistent() {
@@ -131,7 +156,7 @@ impl TransactionMapper {
     &self,
     records: &HashMap<u64, Transaction>,
     hashes: &HashMap<String, u64>,
-    results: &[(&str, Transaction)],
+    results: &[Transaction],
     hash: &str,
   ) -> Transaction {
     hashes
@@ -141,8 +166,8 @@ impl TransactionMapper {
       .unwrap_or_else(|| {
         results
           .iter()
-          .find(|&&(current_hash, _)| current_hash == hash)
-          .map(|&(_, ref result)| result.clone())
+          .find(|result| result.hash() == hash)
+          .cloned()
           .unwrap_or_else(|| self.create_placeholder(hash))
       })
   }

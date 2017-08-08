@@ -2,6 +2,7 @@ mod select;
 mod insert;
 mod update;
 
+use mapper::Record;
 use mysql;
 use std::collections::HashMap;
 
@@ -26,6 +27,55 @@ pub struct Transaction {
   is_mst: bool,
   mst_a: bool,
   solid: u8,
+}
+
+macro_rules! define_getter {
+  ($name:ident, &$type:ty) => {
+    #[allow(dead_code)]
+    pub fn $name(&self) -> &$type {
+      &self.$name
+    }
+  };
+
+  ($name:ident, $type:ty) => {
+    #[allow(dead_code)]
+    pub fn $name(&self) -> $type {
+      self.$name
+    }
+  };
+}
+
+macro_rules! define_setter {
+  ($name:ident, $setter:ident, $type:ty) => {
+    #[allow(dead_code)]
+    pub fn $setter(&mut self, value: $type) {
+      if self.$name != value {
+        self.modified = true;
+        self.$name = value;
+      }
+    }
+  };
+}
+
+macro_rules! define_accessors {
+  ($name:ident, $setter:ident, $type:ty) => {
+    define_getter!($name, $type);
+    define_setter!($name, $setter, $type);
+  };
+}
+
+impl Record for Transaction {
+  fn is_locked(&self) -> bool {
+    self.locked
+  }
+
+  fn lock(&mut self) {
+    self.locked = true;
+  }
+
+  fn unlock(&mut self) {
+    self.locked = false;
+  }
 }
 
 impl Transaction {
@@ -69,18 +119,6 @@ impl Transaction {
   define_accessors!(mst_a, set_mst_a, bool);
   define_accessors!(solid, set_solid, u8);
 
-  pub fn is_locked(&self) -> bool {
-    self.locked
-  }
-
-  pub fn lock(&mut self) {
-    self.locked = true;
-  }
-
-  pub fn unlock(&mut self) {
-    self.locked = false;
-  }
-
   pub fn is_persistent(&self) -> bool {
     self.persistent
   }
@@ -92,6 +130,13 @@ impl Transaction {
   pub fn direct_approve(&mut self) {
     self.modified = true;
     self.da += 1;
+  }
+
+  pub fn approve(&mut self) {
+    if !self.mst_a {
+      self.modified = true;
+      self.mst_a = true;
+    }
   }
 
   pub fn to_params(&self) -> Vec<(String, mysql::Value)> {

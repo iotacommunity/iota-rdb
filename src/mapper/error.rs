@@ -6,6 +6,7 @@ use std::{error, fmt, result};
 pub enum Error {
   Locked,
   Query(query::Error),
+  RecordNotFound,
   ColumnNotFound,
   NullHashToTrits,
 }
@@ -17,6 +18,7 @@ impl fmt::Display for Error {
     match *self {
       Error::Locked => write!(f, "can't obtain a lock"),
       Error::Query(ref err) => write!(f, "Query error: {}", err),
+      Error::RecordNotFound => write!(f, "Record not found"),
       Error::ColumnNotFound => write!(f, "Column not found"),
       Error::NullHashToTrits => write!(f, "Can't convert null_hash to trits"),
     }
@@ -28,6 +30,7 @@ impl error::Error for Error {
     match *self {
       Error::Locked => "Can't obtain a lock",
       Error::Query(ref err) => err.description(),
+      Error::RecordNotFound => "Record not found",
       Error::ColumnNotFound => "Column not found",
       Error::NullHashToTrits => "Can't convert to trits",
     }
@@ -36,7 +39,10 @@ impl error::Error for Error {
   fn cause(&self) -> Option<&error::Error> {
     match *self {
       Error::Query(ref err) => Some(err),
-      Error::Locked | Error::ColumnNotFound | Error::NullHashToTrits => None,
+      Error::RecordNotFound |
+      Error::Locked |
+      Error::ColumnNotFound |
+      Error::NullHashToTrits => None,
     }
   }
 }

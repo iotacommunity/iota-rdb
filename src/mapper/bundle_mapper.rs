@@ -13,6 +13,18 @@ impl BundleMapper {
     Ok(Self { counter })
   }
 
+  pub fn modify<T, U>(
+    &self,
+    _conn: &mut mysql::Conn,
+    _id: u64,
+    f: T,
+  ) -> Result<U>
+  where
+    T: FnOnce() -> U,
+  {
+    Ok(f())
+  }
+
   pub fn fetch(
     &self,
     conn: &mut mysql::Conn,

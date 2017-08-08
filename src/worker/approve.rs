@@ -1,6 +1,6 @@
-use mapper::TransactionMapper;
+use mapper::{BundleMapper, TransactionMapper};
 use mysql;
-use query::{self, event};
+use query::event;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use utils;
@@ -11,43 +11,57 @@ pub type ApproveVec = VecDeque<u64>;
 pub struct Approve {
   conn: mysql::Conn,
   transaction_mapper: Arc<TransactionMapper>,
+  bundle_mapper: Arc<BundleMapper>,
 }
 
 impl Approve {
   pub fn new(
     mysql_uri: &str,
     transaction_mapper: Arc<TransactionMapper>,
+    bundle_mapper: Arc<BundleMapper>,
   ) -> Result<Self> {
     let conn = mysql::Conn::new(mysql_uri)?;
     Ok(Self {
       conn,
       transaction_mapper,
+      bundle_mapper,
     })
   }
 
   pub fn perform(&mut self, mut nodes: ApproveVec) -> Result<()> {
     let (timestamp, mut counter) = (utils::milliseconds_since_epoch()?, 0);
+    let &mut Self {
+      ref mut conn,
+      ref transaction_mapper,
+      ref bundle_mapper,
+    } = self;
     while let Some(id) = nodes.pop_back() {
-      let record = query::find_transaction(&mut self.conn, id)?;
-      if record.mst_a {
-        continue;
+      // TODO catch Error::Locked
+      let mut guard = transaction_mapper.lock();
+      let mut record = transaction_mapper.fetch(&mut guard, conn, id)?;
+      if record.mst_a() || !record.is_persistent() {
+        return Ok(());
       }
-      if record.id_trunk != 0 {
-        nodes.push_front(record.id_trunk);
+      if record.id_trunk() != 0 {
+        nodes.push_front(record.id_trunk());
       }
-      if record.id_branch != 0 {
-        nodes.push_front(record.id_branch);
+      if record.id_branch() != 0 {
+        nodes.push_front(record.id_branch());
       }
-      if let Some(0) = record.current_idx {
-        if let Some(id_bundle) = record.id_bundle {
-          query::update_bundle(&mut self.conn, id_bundle, timestamp)?;
-        }
-      }
-      query::approve_transaction(&mut self.conn, id)?;
+      bundle_mapper.modify(conn, record.id_bundle(), || {})?;
+      // TODO
+      // if record.current_idx() == 0 {
+      //   query::update_bundle(
+      //     &mut self.conn,
+      //     record.id_bundle(),
+      //     timestamp,
+      //   )?;
+      // }
+      record.approve();
       counter += 1;
     }
     if counter > 0 {
-      event::subtangle_confirmation(&mut self.conn, timestamp, counter)?;
+      event::subtangle_confirmation(conn, timestamp, counter)?;
     }
     Ok(())
   }
