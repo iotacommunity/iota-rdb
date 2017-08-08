@@ -1,14 +1,14 @@
 use super::{Error, Mapper, Result};
 use counter::Counter;
 use mysql;
-use record::{Record, Transaction};
+use record::{Record, TransactionRecord};
 use std::collections::hash_map::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 use utils;
 
 const HASH_SIZE: usize = 81;
 
-type TransactionData = (HashMap<u64, Transaction>, HashMap<String, u64>);
+type TransactionData = (HashMap<u64, TransactionRecord>, HashMap<String, u64>);
 
 pub struct TransactionMapper {
   counter: Arc<Counter>,
@@ -18,7 +18,7 @@ pub struct TransactionMapper {
 
 impl Mapper for TransactionMapper {
   type Data = TransactionData;
-  type Record = Transaction;
+  type Record = TransactionRecord;
 
   fn new(counter: Arc<Counter>) -> Result<Self> {
     let data = Mutex::new((HashMap::new(), HashMap::new()));
@@ -37,7 +37,7 @@ impl Mapper for TransactionMapper {
 
   fn records<'a>(
     guard: &'a mut MutexGuard<TransactionData>,
-  ) -> &'a mut HashMap<u64, Transaction> {
+  ) -> &'a mut HashMap<u64, TransactionRecord> {
     let (ref mut records, _) = **guard;
     records
   }
@@ -51,23 +51,23 @@ impl TransactionMapper {
     current_hash: &str,
     trunk_hash: &str,
     branch_hash: &str,
-  ) -> Result<Option<(Transaction, Transaction, Transaction)>> {
+  ) -> Result<Option<(TransactionRecord, TransactionRecord, TransactionRecord)>> {
     if current_hash == self.null_hash &&
       (current_hash == trunk_hash || current_hash == branch_hash)
     {
       return Ok(None);
     }
     let hashes = self.absent_hashes(current_hash, trunk_hash, branch_hash);
-    let results = Transaction::find_by_hashes(conn, &hashes)?;
+    let results = TransactionRecord::find_by_hashes(conn, &hashes)?;
     self.fetch_triplet_results(&results, current_hash, trunk_hash, branch_hash)
   }
 
   pub fn insert(
     &self,
     conn: &mut mysql::Conn,
-    mut current_tx: Transaction,
-    mut trunk_tx: Transaction,
-    mut branch_tx: Transaction,
+    mut current_tx: TransactionRecord,
+    mut trunk_tx: TransactionRecord,
+    mut branch_tx: TransactionRecord,
   ) -> Result<()> {
     let (ref mut records, _) = *self.data.lock().unwrap();
     current_tx.insert(conn)?;
@@ -96,11 +96,11 @@ impl TransactionMapper {
 
   fn fetch_triplet_results(
     &self,
-    results: &[Transaction],
+    results: &[TransactionRecord],
     current_hash: &str,
     trunk_hash: &str,
     branch_hash: &str,
-  ) -> Result<Option<(Transaction, Transaction, Transaction)>> {
+  ) -> Result<Option<(TransactionRecord, TransactionRecord, TransactionRecord)>> {
     let (ref mut records, ref mut hashes) = *self.data.lock().unwrap();
     let mut current_tx =
       self.fetch_result(records, hashes, results, current_hash);
@@ -131,11 +131,11 @@ impl TransactionMapper {
 
   fn fetch_result(
     &self,
-    records: &HashMap<u64, Transaction>,
+    records: &HashMap<u64, TransactionRecord>,
     hashes: &HashMap<String, u64>,
-    results: &[Transaction],
+    results: &[TransactionRecord],
     hash: &str,
-  ) -> Transaction {
+  ) -> TransactionRecord {
     hashes
       .get(hash)
       .and_then(|id_tx| records.get(id_tx))
@@ -149,9 +149,9 @@ impl TransactionMapper {
       })
   }
 
-  fn create_placeholder(&self, hash: &str) -> Transaction {
+  fn create_placeholder(&self, hash: &str) -> TransactionRecord {
     let id_tx = self.counter.next_transaction();
     let solid = if hash == self.null_hash { 0b11 } else { 0b00 };
-    Transaction::placeholder(hash.to_owned(), id_tx, solid)
+    TransactionRecord::placeholder(hash.to_owned(), id_tx, solid)
   }
 }

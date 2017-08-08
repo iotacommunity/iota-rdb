@@ -6,7 +6,7 @@ use mysql;
 use std::collections::HashMap;
 
 #[derive(Clone)]
-pub struct Address {
+pub struct AddressRecord {
   locked: bool,
   persistent: bool,
   modified: bool,
@@ -25,7 +25,7 @@ const SELECT_QUERY: &str = r#"
 
 const WHERE_ADDRESS: &str = r"WHERE address = ?";
 
-impl Record for Address {
+impl Record for AddressRecord {
   define_record!();
 
   const SELECT_QUERY: &'static str = SELECT_QUERY;
@@ -70,7 +70,7 @@ impl Record for Address {
   }
 }
 
-impl Address {
+impl AddressRecord {
   define_getter!(address, &str);
   define_getter!(id_address, u64);
   define_getter!(checksum, &str);
@@ -91,7 +91,7 @@ impl Address {
   pub fn find_by_address(
     conn: &mut mysql::Conn,
     hash: &str,
-  ) -> Result<Option<Address>> {
+  ) -> Result<Option<AddressRecord>> {
     match conn
       .first_exec(format!("{} {}", SELECT_QUERY, WHERE_ADDRESS), (hash,))?
     {
@@ -102,7 +102,7 @@ impl Address {
 
   pub fn store(
     self,
-    records: &mut HashMap<u64, Address>,
+    records: &mut HashMap<u64, AddressRecord>,
     hashes: &mut HashMap<String, u64>,
   ) {
     hashes.insert(self.address().to_owned(), self.id_address());

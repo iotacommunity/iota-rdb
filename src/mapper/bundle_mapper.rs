@@ -1,11 +1,11 @@
 use super::{Mapper, Result};
 use counter::Counter;
 use mysql;
-use record::{Bundle, Record};
+use record::{BundleRecord, Record};
 use std::collections::hash_map::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 
-type BundleData = (HashMap<u64, Bundle>, HashMap<String, u64>);
+type BundleData = (HashMap<u64, BundleRecord>, HashMap<String, u64>);
 
 pub struct BundleMapper {
   counter: Arc<Counter>,
@@ -14,7 +14,7 @@ pub struct BundleMapper {
 
 impl Mapper for BundleMapper {
   type Data = BundleData;
-  type Record = Bundle;
+  type Record = BundleRecord;
 
   fn new(counter: Arc<Counter>) -> Result<Self> {
     let data = Mutex::new((HashMap::new(), HashMap::new()));
@@ -27,7 +27,7 @@ impl Mapper for BundleMapper {
 
   fn records<'a>(
     guard: &'a mut MutexGuard<BundleData>,
-  ) -> &'a mut HashMap<u64, Bundle> {
+  ) -> &'a mut HashMap<u64, BundleRecord> {
     let (ref mut records, _) = **guard;
     records
   }
@@ -45,12 +45,12 @@ impl BundleMapper {
     match hashes.get(hash) {
       Some(&id_bundle) => Ok(id_bundle),
       None => {
-        let record = match Bundle::find_by_bundle(conn, hash)? {
+        let record = match BundleRecord::find_by_bundle(conn, hash)? {
           Some(record) => record,
           None => {
             let id_bundle = self.counter.next_bundle();
             let mut record =
-              Bundle::new(id_bundle, hash.to_owned(), size, created);
+              BundleRecord::new(id_bundle, hash.to_owned(), size, created);
             record.insert(conn)?;
             record
           }

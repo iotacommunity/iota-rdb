@@ -3,7 +3,7 @@ use mysql;
 use std::collections::HashMap;
 
 #[derive(Clone)]
-pub struct Transaction {
+pub struct TransactionRecord {
   locked: bool,
   persistent: bool,
   modified: bool,
@@ -50,7 +50,7 @@ const WHERE_HASH_ONE: &str = r"WHERE hash = ?";
 const WHERE_HASH_TWO: &str = r"WHERE hash IN (?, ?)";
 const WHERE_HASH_THREE: &str = r"WHERE hash IN (?, ?, ?)";
 
-impl Record for Transaction {
+impl Record for TransactionRecord {
   define_record!();
 
   const SELECT_QUERY: &'static str = SELECT_QUERY;
@@ -159,7 +159,7 @@ impl Record for Transaction {
   }
 }
 
-impl Transaction {
+impl TransactionRecord {
   define_getter!(hash, &str);
   define_getter!(id_tx, u64);
   define_accessors!(id_trunk, set_id_trunk, u64);
@@ -204,7 +204,7 @@ impl Transaction {
   pub fn find_by_hashes(
     conn: &mut mysql::Conn,
     hashes: &[&str],
-  ) -> Result<Vec<Transaction>> {
+  ) -> Result<Vec<TransactionRecord>> {
     let mut results = Vec::new();
     for hashes in hashes.chunks(3) {
       let rows = match hashes.len() {
@@ -223,7 +223,7 @@ impl Transaction {
         _ => unreachable!(),
       };
       for row in rows {
-        results.push(Transaction::from_row(&mut row?)?);
+        results.push(TransactionRecord::from_row(&mut row?)?);
       }
     }
     Ok(results)
@@ -243,7 +243,7 @@ impl Transaction {
 
   pub fn store(
     &self,
-    records: &mut HashMap<u64, Transaction>,
+    records: &mut HashMap<u64, TransactionRecord>,
     hashes: &mut HashMap<String, u64>,
   ) {
     records.insert(self.id_tx(), self.clone());

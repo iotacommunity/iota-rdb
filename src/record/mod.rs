@@ -1,16 +1,16 @@
 #[macro_use]
 mod macros;
-mod transaction;
-mod address;
-mod bundle;
+mod transaction_record;
+mod address_record;
+mod bundle_record;
 mod record_guard;
 mod error;
 
-pub use self::address::Address;
-pub use self::bundle::Bundle;
+pub use self::address_record::AddressRecord;
+pub use self::bundle_record::BundleRecord;
 pub use self::error::{Error, Result};
 pub use self::record_guard::RecordGuard;
-pub use self::transaction::Transaction;
+pub use self::transaction_record::TransactionRecord;
 
 use mysql;
 

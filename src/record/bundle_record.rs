@@ -3,7 +3,7 @@ use mysql;
 use std::collections::HashMap;
 
 #[derive(Clone)]
-pub struct Bundle {
+pub struct BundleRecord {
   locked: bool,
   persistent: bool,
   modified: bool,
@@ -26,7 +26,7 @@ const SELECT_QUERY: &str = r#"
 
 const WHERE_BUNDLE: &str = r"WHERE bundle = ?";
 
-impl Record for Bundle {
+impl Record for BundleRecord {
   define_record!();
 
   const SELECT_QUERY: &'static str = SELECT_QUERY;
@@ -80,7 +80,7 @@ impl Record for Bundle {
   }
 }
 
-impl Bundle {
+impl BundleRecord {
   define_getter!(bundle, &str);
   define_getter!(id_bundle, u64);
   define_accessors!(created, set_created, f64);
@@ -103,7 +103,7 @@ impl Bundle {
   pub fn find_by_bundle(
     conn: &mut mysql::Conn,
     hash: &str,
-  ) -> Result<Option<Bundle>> {
+  ) -> Result<Option<BundleRecord>> {
     match conn
       .first_exec(format!("{} {}", SELECT_QUERY, WHERE_BUNDLE), (hash,))?
     {
@@ -114,7 +114,7 @@ impl Bundle {
 
   pub fn store(
     self,
-    records: &mut HashMap<u64, Bundle>,
+    records: &mut HashMap<u64, BundleRecord>,
     hashes: &mut HashMap<String, u64>,
   ) {
     hashes.insert(self.bundle().to_owned(), self.id_bundle());

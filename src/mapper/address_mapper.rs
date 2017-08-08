@@ -1,11 +1,11 @@
 use super::{Mapper, Result};
 use counter::Counter;
 use mysql;
-use record::{Address, Record};
+use record::{AddressRecord, Record};
 use std::collections::hash_map::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 
-type AddressData = (HashMap<u64, Address>, HashMap<String, u64>);
+type AddressData = (HashMap<u64, AddressRecord>, HashMap<String, u64>);
 
 pub struct AddressMapper {
   counter: Arc<Counter>,
@@ -14,7 +14,7 @@ pub struct AddressMapper {
 
 impl Mapper for AddressMapper {
   type Data = AddressData;
-  type Record = Address;
+  type Record = AddressRecord;
 
   fn new(counter: Arc<Counter>) -> Result<Self> {
     let data = Mutex::new((HashMap::new(), HashMap::new()));
@@ -27,7 +27,7 @@ impl Mapper for AddressMapper {
 
   fn records<'a>(
     guard: &'a mut MutexGuard<AddressData>,
-  ) -> &'a mut HashMap<u64, Address> {
+  ) -> &'a mut HashMap<u64, AddressRecord> {
     let (ref mut records, _) = **guard;
     records
   }
@@ -43,11 +43,11 @@ impl AddressMapper {
     match hashes.get(hash) {
       Some(&id_address) => Ok(id_address),
       None => {
-        let record = match Address::find_by_address(conn, hash)? {
+        let record = match AddressRecord::find_by_address(conn, hash)? {
           Some(record) => record,
           None => {
             let id_address = self.counter.next_address();
-            let mut record = Address::new(id_address, hash.to_owned())?;
+            let mut record = AddressRecord::new(id_address, hash.to_owned())?;
             record.insert(conn)?;
             record
           }
