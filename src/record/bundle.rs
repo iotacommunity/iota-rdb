@@ -1,5 +1,4 @@
-use super::{Error, Result};
-use mapper::Record;
+use super::{Error, Record, Result};
 use mysql;
 use std::collections::HashMap;
 

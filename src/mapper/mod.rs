@@ -1,27 +1,16 @@
-#[macro_use]
-mod macros;
 mod transaction_mapper;
 mod address_mapper;
 mod bundle_mapper;
-mod transaction;
-mod address;
-mod bundle;
-mod record;
-mod record_guard;
 mod error;
 
-pub use self::address::Address;
 pub use self::address_mapper::AddressMapper;
-pub use self::bundle::Bundle;
 pub use self::bundle_mapper::BundleMapper;
 pub use self::error::{Error, Result};
-pub use self::record::Record;
-pub use self::record_guard::RecordGuard;
-pub use self::transaction::Transaction;
 pub use self::transaction_mapper::TransactionMapper;
 
 use counter::Counter;
 use mysql;
+use record::{Record, RecordGuard};
 use std::collections::hash_map::{Entry, HashMap};
 use std::sync::{Arc, MutexGuard};
 

@@ -1,6 +1,7 @@
-use mapper::{BundleMapper, Mapper, Record, TransactionMapper};
+use mapper::{BundleMapper, Mapper, TransactionMapper};
 use mysql;
 use query::event;
+use record::Record;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use utils;

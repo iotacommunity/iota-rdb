@@ -1,4 +1,17 @@
-use super::{Error, Result};
+#[macro_use]
+mod macros;
+mod transaction;
+mod address;
+mod bundle;
+mod record_guard;
+mod error;
+
+pub use self::address::Address;
+pub use self::bundle::Bundle;
+pub use self::error::{Error, Result};
+pub use self::record_guard::RecordGuard;
+pub use self::transaction::Transaction;
+
 use mysql;
 
 pub trait Record: Sized {

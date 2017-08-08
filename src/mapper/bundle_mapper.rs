@@ -1,7 +1,7 @@
-use super::Result;
+use super::{Mapper, Result};
 use counter::Counter;
-use mapper::{Bundle, Mapper, Record};
 use mysql;
+use record::{Bundle, Record};
 use std::collections::hash_map::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 

@@ -1,4 +1,4 @@
-use mapper::Record;
+use super::Record;
 use std::ops::{Deref, DerefMut, Drop};
 
 pub struct RecordGuard<'a, T: Record + 'a> {

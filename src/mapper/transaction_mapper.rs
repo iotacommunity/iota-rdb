@@ -1,7 +1,7 @@
-use super::{Error, Result};
+use super::{Error, Mapper, Result};
 use counter::Counter;
-use mapper::{Mapper, Record, Transaction};
 use mysql;
+use record::{Record, Transaction};
 use std::collections::hash_map::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 use utils;

@@ -1,8 +1,7 @@
-use super::{Error, Result};
+use super::{Error, Record, Result};
 use iota_curl_cpu::CpuCurl;
 use iota_sign::{trits_checksum, CHECKSUM_LEN};
 use iota_trytes::{char_to_trits, trits_to_string};
-use mapper::Record;
 use mysql;
 use std::collections::HashMap;
 

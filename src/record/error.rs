@@ -1,14 +1,13 @@
 use mysql;
 use query;
-use record;
 use std::{error, fmt, result};
 
 #[derive(Debug)]
 pub enum Error {
-  Locked,
   Query(query::Error),
-  Record(record::Error),
-  NullHashToTrits,
+  RecordNotFound,
+  ColumnNotFound,
+  AddressChecksumToTrits,
 }
 
 pub type Result<T> = result::Result<T, Error>;
@@ -16,10 +15,12 @@ pub type Result<T> = result::Result<T, Error>;
 impl fmt::Display for Error {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match *self {
-      Error::Locked => write!(f, "can't obtain a lock"),
       Error::Query(ref err) => write!(f, "Query error: {}", err),
-      Error::Record(ref err) => write!(f, "Record error: {}", err),
-      Error::NullHashToTrits => write!(f, "Can't convert null_hash to trits"),
+      Error::RecordNotFound => write!(f, "Record not found"),
+      Error::ColumnNotFound => write!(f, "Column not found"),
+      Error::AddressChecksumToTrits => {
+        write!(f, "can't convert address checksum to trits")
+      }
     }
   }
 }
@@ -27,25 +28,20 @@ impl fmt::Display for Error {
 impl error::Error for Error {
   fn description(&self) -> &str {
     match *self {
-      Error::Locked => "Can't obtain a lock",
       Error::Query(ref err) => err.description(),
-      Error::Record(ref err) => err.description(),
-      Error::NullHashToTrits => "Can't convert to trits",
+      Error::RecordNotFound => "Record not found",
+      Error::ColumnNotFound => "Column not found",
+      Error::AddressChecksumToTrits => "Can't convert to trits",
     }
   }
 
   fn cause(&self) -> Option<&error::Error> {
     match *self {
       Error::Query(ref err) => Some(err),
-      Error::Record(ref err) => Some(err),
-      Error::Locked | Error::NullHashToTrits => None,
+      Error::RecordNotFound |
+      Error::ColumnNotFound |
+      Error::AddressChecksumToTrits => None,
     }
-  }
-}
-
-impl From<record::Error> for Error {
-  fn from(err: record::Error) -> Error {
-    Error::Record(err)
   }
 }
 
