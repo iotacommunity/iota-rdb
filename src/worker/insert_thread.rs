@@ -1,5 +1,5 @@
 use mapper::{self, AddressMapper, BundleMapper, TransactionMapper};
-use message::Message;
+use message::TransactionMessage;
 use std::collections::VecDeque;
 use std::sync::{mpsc, Arc};
 use std::thread;
@@ -40,7 +40,7 @@ impl<'a> InsertThread<'a> {
     thread::spawn(move || loop {
       match insert_rx.recv_timeout(Duration::from_millis(LOCK_RETRY_INTERVAL)) {
         Ok(message) => {
-          let message = Message::parse(
+          let message = TransactionMessage::parse(
             &message,
             &milestone_address,
             &milestone_start_index,

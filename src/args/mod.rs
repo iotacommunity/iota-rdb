@@ -2,7 +2,7 @@ mod error;
 
 pub use self::error::{Error, Result};
 use clap::ArgMatches;
-use message::TAG_LENGTH;
+use message::transaction_message::TAG_LENGTH;
 use utils;
 
 pub struct Args<'a> {

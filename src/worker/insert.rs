@@ -1,6 +1,6 @@
 use super::Result;
 use mapper::{AddressMapper, BundleMapper, TransactionMapper};
-use message::Message;
+use message::TransactionMessage;
 use mysql;
 use query::event;
 use std::collections::VecDeque;
@@ -33,7 +33,7 @@ impl Insert {
 
   pub fn perform(
     &mut self,
-    message: &Message,
+    message: &TransactionMessage,
   ) -> Result<(Option<ApproveVec>, Option<SolidateVec>)> {
     let timestamp = utils::milliseconds_since_epoch()?;
     let (mut approve_data, mut solidate_data) = (None, None);
