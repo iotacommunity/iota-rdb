@@ -4,11 +4,13 @@ mod transaction_mapper;
 mod address_mapper;
 mod bundle_mapper;
 mod transaction;
+mod address;
 mod bundle;
 mod record;
 mod record_guard;
 mod error;
 
+pub use self::address::Address;
 pub use self::address_mapper::AddressMapper;
 pub use self::bundle::Bundle;
 pub use self::bundle_mapper::BundleMapper;

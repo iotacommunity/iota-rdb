@@ -9,6 +9,7 @@ pub enum Error {
   RecordNotFound,
   ColumnNotFound,
   NullHashToTrits,
+  AddressChecksumToTrits,
 }
 
 pub type Result<T> = result::Result<T, Error>;
@@ -21,6 +22,9 @@ impl fmt::Display for Error {
       Error::RecordNotFound => write!(f, "Record not found"),
       Error::ColumnNotFound => write!(f, "Column not found"),
       Error::NullHashToTrits => write!(f, "Can't convert null_hash to trits"),
+      Error::AddressChecksumToTrits => {
+        write!(f, "can't convert address checksum to trits")
+      }
     }
   }
 }
@@ -32,7 +36,9 @@ impl error::Error for Error {
       Error::Query(ref err) => err.description(),
       Error::RecordNotFound => "Record not found",
       Error::ColumnNotFound => "Column not found",
-      Error::NullHashToTrits => "Can't convert to trits",
+      Error::NullHashToTrits | Error::AddressChecksumToTrits => {
+        "Can't convert to trits"
+      }
     }
   }
 
@@ -42,7 +48,8 @@ impl error::Error for Error {
       Error::RecordNotFound |
       Error::Locked |
       Error::ColumnNotFound |
-      Error::NullHashToTrits => None,
+      Error::NullHashToTrits |
+      Error::AddressChecksumToTrits => None,
     }
   }
 }

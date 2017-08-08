@@ -34,8 +34,7 @@ impl Update {
       ref bundle_mapper,
     } = self;
     update(&**transaction_mapper, conn)?;
-    // TODO
-    // update(&**address_mapper, conn)?;
+    update(&**address_mapper, conn)?;
     update(&**bundle_mapper, conn)?;
     Ok(())
   }

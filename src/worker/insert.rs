@@ -39,7 +39,7 @@ impl Insert {
     let (mut approve_data, mut solidate_data) = (None, None);
     let id_address = self
       .address_mapper
-      .fetch(&mut self.conn, message.address_hash())?;
+      .fetch_or_insert(&mut self.conn, message.address_hash())?;
     let id_bundle = self.bundle_mapper.fetch_or_insert(
       &mut self.conn,
       message.bundle_hash(),
