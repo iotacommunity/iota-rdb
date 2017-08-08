@@ -10,7 +10,7 @@ pub struct Message {
   address_hash: String,
   value: i64,
   tag: String,
-  timestamp: i64,
+  timestamp: f64,
   current_index: i32,
   last_index: i32,
   bundle_hash: String,
@@ -59,51 +59,16 @@ impl Message {
     })
   }
 
-  pub fn hash(&self) -> &str {
-    &self.hash
-  }
-
-  pub fn address_hash(&self) -> &str {
-    &self.address_hash
-  }
-
-  pub fn value(&self) -> i64 {
-    self.value
-  }
-
-  pub fn tag(&self) -> &str {
-    &self.tag
-  }
-
-  pub fn timestamp(&self) -> i64 {
-    self.timestamp
-  }
-
-  pub fn current_index(&self) -> i32 {
-    self.current_index
-  }
-
-  pub fn last_index(&self) -> i32 {
-    self.last_index
-  }
-
-  pub fn bundle_hash(&self) -> &str {
-    &self.bundle_hash
-  }
-
-  pub fn trunk_hash(&self) -> &str {
-    &self.trunk_hash
-  }
-
-  pub fn branch_hash(&self) -> &str {
-    &self.branch_hash
-  }
-
-  pub fn is_milestone(&self) -> bool {
-    self.is_milestone
-  }
-
-  pub fn solid(&self) -> u8 {
-    self.solid
-  }
+  define_getter!(hash, &str);
+  define_getter!(address_hash, &str);
+  define_getter!(value, i64);
+  define_getter!(tag, &str);
+  define_getter!(timestamp, f64);
+  define_getter!(current_index, i32);
+  define_getter!(last_index, i32);
+  define_getter!(bundle_hash, &str);
+  define_getter!(trunk_hash, &str);
+  define_getter!(branch_hash, &str);
+  define_getter!(is_milestone, bool);
+  define_getter!(solid, u8);
 }

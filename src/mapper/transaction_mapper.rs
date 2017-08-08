@@ -1,23 +1,26 @@
 use super::{Error, Result};
 use counter::Counter;
-use mapper::{Record, RecordGuard, Transaction};
+use mapper::{Mapper, Record, Transaction};
 use mysql;
-use std::collections::hash_map::{Entry, HashMap};
+use std::collections::hash_map::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 use utils;
 
 const HASH_SIZE: usize = 81;
 
-type Data = (HashMap<u64, Transaction>, HashMap<String, u64>);
+type TransactionData = (HashMap<u64, Transaction>, HashMap<String, u64>);
 
 pub struct TransactionMapper {
   counter: Arc<Counter>,
-  data: Mutex<Data>,
+  data: Mutex<TransactionData>,
   null_hash: String,
 }
 
-impl TransactionMapper {
-  pub fn new(counter: Arc<Counter>) -> Result<Self> {
+impl Mapper for TransactionMapper {
+  type Data = TransactionData;
+  type Record = Transaction;
+
+  fn new(counter: Arc<Counter>) -> Result<Self> {
     let data = Mutex::new((HashMap::new(), HashMap::new()));
     let null_hash = utils::trits_string(0, HASH_SIZE)
       .ok_or(Error::NullHashToTrits)?;
@@ -28,36 +31,20 @@ impl TransactionMapper {
     })
   }
 
-  pub fn lock(&self) -> MutexGuard<Data> {
+  fn lock(&self) -> MutexGuard<TransactionData> {
     self.data.lock().unwrap()
   }
 
-  pub fn fetch<'a>(
-    &self,
-    guard: &'a mut MutexGuard<Data>,
-    conn: &mut mysql::Conn,
-    id: u64,
-  ) -> Result<RecordGuard<'a, Transaction>> {
+  fn records<'a>(
+    guard: &'a mut MutexGuard<TransactionData>,
+  ) -> &'a mut HashMap<u64, Transaction> {
     let (ref mut records, _) = **guard;
-    let record = match records.entry(id) {
-      Entry::Occupied(entry) => {
-        let mut record = entry.into_mut();
-        if record.is_locked() {
-          return Err(Error::Locked);
-        } else {
-          record.lock();
-          record
-        }
-      }
-      Entry::Vacant(entry) => {
-        let mut record = Transaction::find_by_id(conn, id)?;
-        record.lock();
-        entry.insert(record)
-      }
-    };
-    Ok(RecordGuard::new(record))
+    records
   }
+}
 
+impl TransactionMapper {
+  // TODO return record guards
   pub fn fetch_triplet(
     &self,
     conn: &mut mysql::Conn,
@@ -90,16 +77,6 @@ impl TransactionMapper {
     records.insert(current_tx.id_tx(), current_tx);
     records.insert(trunk_tx.id_tx(), trunk_tx);
     records.insert(branch_tx.id_tx(), branch_tx);
-    Ok(())
-  }
-
-  pub fn update(&self, conn: &mut mysql::Conn) -> Result<()> {
-    let (ref mut records, _) = *self.data.lock().unwrap();
-    for record in records.values_mut() {
-      if record.is_modified() {
-        record.update(conn)?;
-      }
-    }
     Ok(())
   }
 

@@ -1,4 +1,4 @@
-use mapper::{BundleMapper, TransactionMapper};
+use mapper::{BundleMapper, Mapper, Record, TransactionMapper};
 use mysql;
 use query::event;
 use std::collections::VecDeque;
@@ -38,26 +38,23 @@ impl Approve {
     while let Some(id) = nodes.pop_back() {
       // TODO catch Error::Locked
       let mut guard = transaction_mapper.lock();
-      let mut record = transaction_mapper.fetch(&mut guard, conn, id)?;
-      if record.mst_a() || !record.is_persistent() {
+      let mut transaction = transaction_mapper.fetch(&mut guard, conn, id)?;
+      if transaction.mst_a() || !transaction.is_persistent() {
         return Ok(());
       }
-      if record.id_trunk() != 0 {
-        nodes.push_front(record.id_trunk());
+      if transaction.id_trunk() != 0 {
+        nodes.push_front(transaction.id_trunk());
       }
-      if record.id_branch() != 0 {
-        nodes.push_front(record.id_branch());
+      if transaction.id_branch() != 0 {
+        nodes.push_front(transaction.id_branch());
       }
-      bundle_mapper.modify(conn, record.id_bundle(), || {})?;
-      // TODO
-      // if record.current_idx() == 0 {
-      //   query::update_bundle(
-      //     &mut self.conn,
-      //     record.id_bundle(),
-      //     timestamp,
-      //   )?;
-      // }
-      record.approve();
+      if transaction.current_idx() == 0 {
+        let mut guard = bundle_mapper.lock();
+        let mut bundle = bundle_mapper
+          .fetch(&mut guard, conn, transaction.id_bundle())?;
+        bundle.set_confirmed(timestamp);
+      }
+      transaction.approve();
       counter += 1;
     }
     if counter > 0 {

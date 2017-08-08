@@ -1,47 +1,64 @@
 use super::Result;
 use counter::Counter;
+use mapper::{Bundle, Mapper, Record};
 use mysql;
-use query;
-use std::sync::Arc;
+use std::collections::hash_map::HashMap;
+use std::sync::{Arc, Mutex, MutexGuard};
+
+type BundleData = (HashMap<u64, Bundle>, HashMap<String, u64>);
 
 pub struct BundleMapper {
   counter: Arc<Counter>,
+  data: Mutex<BundleData>,
+}
+
+impl Mapper for BundleMapper {
+  type Data = BundleData;
+  type Record = Bundle;
+
+  fn new(counter: Arc<Counter>) -> Result<Self> {
+    let data = Mutex::new((HashMap::new(), HashMap::new()));
+    Ok(Self { counter, data })
+  }
+
+  fn lock(&self) -> MutexGuard<BundleData> {
+    self.data.lock().unwrap()
+  }
+
+  fn records<'a>(
+    guard: &'a mut MutexGuard<BundleData>,
+  ) -> &'a mut HashMap<u64, Bundle> {
+    let (ref mut records, _) = **guard;
+    records
+  }
 }
 
 impl BundleMapper {
-  pub fn new(counter: Arc<Counter>) -> Result<Self> {
-    Ok(Self { counter })
-  }
-
-  pub fn modify<T, U>(
-    &self,
-    _conn: &mut mysql::Conn,
-    _id: u64,
-    f: T,
-  ) -> Result<U>
-  where
-    T: FnOnce() -> U,
-  {
-    Ok(f())
-  }
-
-  pub fn fetch(
+  pub fn fetch_or_insert(
     &self,
     conn: &mut mysql::Conn,
-    created: f64,
-    bundle: &str,
+    hash: &str,
     size: i32,
+    created: f64,
   ) -> Result<u64> {
-    Ok(query::fetch_bundle(
-      conn,
-      &self.counter,
-      created,
-      bundle,
-      size,
-    )?)
-  }
-
-  pub fn update(&self, _conn: &mut mysql::Conn) -> Result<()> {
-    Ok(())
+    let (ref mut records, ref mut hashes) = *self.data.lock().unwrap();
+    match hashes.get(hash) {
+      Some(&id_bundle) => Ok(id_bundle),
+      None => {
+        let record = match Bundle::find_by_bundle(conn, hash)? {
+          Some(record) => record,
+          None => {
+            let id_bundle = self.counter.next_bundle();
+            let mut record =
+              Bundle::new(id_bundle, hash.to_owned(), size, created);
+            record.insert(conn)?;
+            record
+          }
+        };
+        let id_bundle = record.id_bundle();
+        record.store(records, hashes);
+        Ok(id_bundle)
+      }
+    }
   }
 }

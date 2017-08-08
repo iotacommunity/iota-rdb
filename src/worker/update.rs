@@ -1,5 +1,5 @@
 use super::Result;
-use mapper::{AddressMapper, BundleMapper, TransactionMapper};
+use mapper::{AddressMapper, BundleMapper, Mapper, TransactionMapper};
 use mysql;
 use std::sync::Arc;
 
@@ -27,9 +27,22 @@ impl Update {
   }
 
   pub fn perform(&mut self) -> Result<()> {
-    self.transaction_mapper.update(&mut self.conn)?;
-    self.address_mapper.update(&mut self.conn)?;
-    self.bundle_mapper.update(&mut self.conn)?;
+    let &mut Self {
+      ref mut conn,
+      ref transaction_mapper,
+      ref address_mapper,
+      ref bundle_mapper,
+    } = self;
+    update(&**transaction_mapper, conn)?;
+    // TODO
+    // update(&**address_mapper, conn)?;
+    update(&**bundle_mapper, conn)?;
     Ok(())
   }
+}
+
+fn update<T: Mapper>(mapper: &T, conn: &mut mysql::Conn) -> Result<()> {
+  let mut guard = mapper.lock();
+  mapper.update(&mut guard, conn)?;
+  Ok(())
 }

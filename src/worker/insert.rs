@@ -35,7 +35,17 @@ impl Insert {
     &mut self,
     message: &Message,
   ) -> Result<(Option<ApproveVec>, Option<SolidateVec>)> {
+    let timestamp = utils::milliseconds_since_epoch()?;
     let (mut approve_data, mut solidate_data) = (None, None);
+    let id_address = self
+      .address_mapper
+      .fetch(&mut self.conn, message.address_hash())?;
+    let id_bundle = self.bundle_mapper.fetch_or_insert(
+      &mut self.conn,
+      message.bundle_hash(),
+      message.last_index(),
+      timestamp,
+    )?;
     let txs = self.transaction_mapper.fetch_triplet(
       &mut self.conn,
       message.hash(),
@@ -43,16 +53,6 @@ impl Insert {
       message.branch_hash(),
     )?;
     if let Some((mut current_tx, trunk_tx, branch_tx)) = txs {
-      let timestamp = utils::milliseconds_since_epoch()?;
-      let id_address = self
-        .address_mapper
-        .fetch(&mut self.conn, message.address_hash())?;
-      let id_bundle = self.bundle_mapper.fetch(
-        &mut self.conn,
-        timestamp,
-        message.bundle_hash(),
-        message.last_index(),
-      )?;
       let mut solid = message.solid();
       current_tx.set_height(if solid != 0b11 && trunk_tx.solid() == 0b11 {
         trunk_tx.height() + 1

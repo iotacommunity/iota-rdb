@@ -23,7 +23,7 @@ mod utils;
 
 use args::Args;
 use counter::Counter;
-use mapper::{AddressMapper, BundleMapper, TransactionMapper};
+use mapper::{AddressMapper, BundleMapper, Mapper, TransactionMapper};
 use std::process::exit;
 use std::sync::{mpsc, Arc};
 use worker::{ApproveThread, InsertThread, SolidateThread, UpdateThread,
