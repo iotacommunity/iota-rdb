@@ -3,13 +3,11 @@ mod macros;
 mod transaction_record;
 mod address_record;
 mod bundle_record;
-mod record_guard;
 mod error;
 
 pub use self::address_record::AddressRecord;
 pub use self::bundle_record::BundleRecord;
 pub use self::error::{Error, Result};
-pub use self::record_guard::RecordGuard;
 pub use self::transaction_record::TransactionRecord;
 
 use mysql;
@@ -17,12 +15,13 @@ use mysql;
 pub trait Record: Sized {
   const SELECT_QUERY: &'static str;
   const SELECT_WHERE_ID: &'static str;
+  const SELECT_WHERE_HASH: &'static str;
   const INSERT_QUERY: &'static str;
   const UPDATE_QUERY: &'static str;
 
   fn from_row(row: &mut mysql::Row) -> Result<Self>;
 
-  fn find(conn: &mut mysql::Conn, id: u64) -> Result<Self> {
+  fn find_by_id(conn: &mut mysql::Conn, id: u64) -> Result<Self> {
     Ok(conn
       .first_exec(
         format!("{}, {}", Self::SELECT_QUERY, Self::SELECT_WHERE_ID),
@@ -32,9 +31,19 @@ pub trait Record: Sized {
       .and_then(|mut row| Self::from_row(&mut row))?)
   }
 
+  fn find_by_hash(conn: &mut mysql::Conn, hash: &str) -> Result<Option<Self>> {
+    match conn.first_exec(
+      format!("{} {}", Self::SELECT_QUERY, Self::SELECT_WHERE_HASH),
+      (hash,),
+    )? {
+      Some(ref mut row) => Ok(Some(Self::from_row(row)?)),
+      None => Ok(None),
+    }
+  }
+
   fn insert(&mut self, conn: &mut mysql::Conn) -> Result<()> {
     conn.prep_exec(Self::INSERT_QUERY, self.to_params())?;
-    self.set_persistent(true);
+    self.set_persisted(true);
     self.set_modified(false);
     Ok(())
   }
@@ -57,17 +66,15 @@ pub trait Record: Sized {
 
   fn to_params(&self) -> Vec<(String, mysql::Value)>;
 
-  fn is_persistent(&self) -> bool;
+  fn is_persisted(&self) -> bool;
 
   fn is_modified(&self) -> bool;
 
-  fn is_locked(&self) -> bool;
-
-  fn set_persistent(&mut self, value: bool);
+  fn set_persisted(&mut self, value: bool);
 
   fn set_modified(&mut self, value: bool);
 
-  fn lock(&mut self);
+  fn id(&self) -> u64;
 
-  fn unlock(&mut self);
+  fn hash(&self) -> &str;
 }

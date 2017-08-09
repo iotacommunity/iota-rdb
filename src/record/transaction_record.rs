@@ -1,11 +1,10 @@
 use super::{Error, Record, Result};
 use mysql;
-use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct TransactionRecord {
   locked: bool,
-  persistent: bool,
+  persisted: bool,
   modified: bool,
   hash: String,
   id_tx: u64,
@@ -55,6 +54,7 @@ impl Record for TransactionRecord {
 
   const SELECT_QUERY: &'static str = SELECT_QUERY;
   const SELECT_WHERE_ID: &'static str = r"WHERE id_tx = ?";
+  const SELECT_WHERE_HASH: &'static str = WHERE_HASH_ONE;
 
   const INSERT_QUERY: &'static str = r#"
     INSERT INTO tx (
@@ -116,7 +116,7 @@ impl Record for TransactionRecord {
   fn from_row(row: &mut mysql::Row) -> Result<Self> {
     Ok(Self {
       locked: false,
-      persistent: true,
+      persisted: true,
       modified: false,
       hash: row.take_opt("hash").ok_or(Error::ColumnNotFound)??,
       id_tx: row.take_opt("id_tx").ok_or(Error::ColumnNotFound)??,
@@ -157,10 +157,17 @@ impl Record for TransactionRecord {
       "solid" => self.solid,
     }
   }
+
+  fn id(&self) -> u64 {
+    self.id_tx
+  }
+
+  fn hash(&self) -> &str {
+    &self.hash
+  }
 }
 
 impl TransactionRecord {
-  define_getter!(hash, &str);
   define_getter!(id_tx, u64);
   define_accessors!(id_trunk, set_id_trunk, u64);
   define_accessors!(id_branch, set_id_branch, u64);
@@ -177,10 +184,10 @@ impl TransactionRecord {
   define_accessors!(mst_a, set_mst_a, bool);
   define_accessors!(solid, set_solid, u8);
 
-  pub fn placeholder(hash: String, id_tx: u64, solid: u8) -> Self {
+  pub fn placeholder(hash: String, id_tx: u64) -> Self {
     Self {
       locked: false,
-      persistent: false,
+      persisted: false,
       modified: true,
       hash,
       id_tx,
@@ -197,7 +204,7 @@ impl TransactionRecord {
       height: 0,
       is_mst: false,
       mst_a: false,
-      solid,
+      solid: 0b00,
     }
   }
 
@@ -239,14 +246,5 @@ impl TransactionRecord {
       self.modified = true;
       self.mst_a = true;
     }
-  }
-
-  pub fn store(
-    &self,
-    records: &mut HashMap<u64, TransactionRecord>,
-    hashes: &mut HashMap<String, u64>,
-  ) {
-    records.insert(self.id_tx(), self.clone());
-    hashes.insert(self.hash().to_owned(), self.id_tx());
   }
 }

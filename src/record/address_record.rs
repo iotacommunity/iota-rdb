@@ -3,12 +3,11 @@ use iota_curl_cpu::CpuCurl;
 use iota_sign::{trits_checksum, CHECKSUM_LEN};
 use iota_trytes::{char_to_trits, trits_to_string};
 use mysql;
-use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct AddressRecord {
   locked: bool,
-  persistent: bool,
+  persisted: bool,
   modified: bool,
   address: String,
   id_address: u64,
@@ -23,13 +22,12 @@ const SELECT_QUERY: &str = r#"
   FROM address
 "#;
 
-const WHERE_ADDRESS: &str = r"WHERE address = ?";
-
 impl Record for AddressRecord {
   define_record!();
 
   const SELECT_QUERY: &'static str = SELECT_QUERY;
   const SELECT_WHERE_ID: &'static str = r"WHERE id_address = ?";
+  const SELECT_WHERE_HASH: &'static str = r"WHERE address = ?";
 
   const INSERT_QUERY: &'static str = r#"
     INSERT INTO address (
@@ -52,7 +50,7 @@ impl Record for AddressRecord {
   fn from_row(row: &mut mysql::Row) -> Result<Self> {
     Ok(Self {
       locked: false,
-      persistent: true,
+      persisted: true,
       modified: false,
       address: row.take_opt("address").ok_or(Error::ColumnNotFound)??,
       id_address: row.take_opt("id_address").ok_or(Error::ColumnNotFound)??,
@@ -68,6 +66,14 @@ impl Record for AddressRecord {
       "checksum" => self.checksum.clone(),
     }
   }
+
+  fn id(&self) -> u64 {
+    self.id_address
+  }
+
+  fn hash(&self) -> &str {
+    &self.address
+  }
 }
 
 impl AddressRecord {
@@ -80,33 +86,12 @@ impl AddressRecord {
     let checksum = calculate_checksum(&address)?;
     Ok(Self {
       locked: false,
-      persistent: false,
+      persisted: false,
       modified: true,
       address,
       id_address,
       checksum,
     })
-  }
-
-  pub fn find_by_address(
-    conn: &mut mysql::Conn,
-    hash: &str,
-  ) -> Result<Option<AddressRecord>> {
-    match conn
-      .first_exec(format!("{} {}", SELECT_QUERY, WHERE_ADDRESS), (hash,))?
-    {
-      Some(ref mut row) => Ok(Some(Self::from_row(row)?)),
-      None => Ok(None),
-    }
-  }
-
-  pub fn store(
-    self,
-    records: &mut HashMap<u64, AddressRecord>,
-    hashes: &mut HashMap<String, u64>,
-  ) {
-    hashes.insert(self.address().to_owned(), self.id_address());
-    records.insert(self.id_address(), self);
   }
 }
 

@@ -58,10 +58,9 @@ pub fn perform(
 ) -> Result<()> {
   let (timestamp, mut counter) = (utils::milliseconds_since_epoch()?, 0);
   while let Some(id) = nodes.pop_back() {
-    // TODO catch Error::Locked
-    let mut guard = transaction_mapper.lock();
-    let mut transaction = transaction_mapper.fetch(&mut guard, conn, id)?;
-    if transaction.mst_a() || !transaction.is_persistent() {
+    let transaction = transaction_mapper.fetch(conn, id)?;
+    let mut transaction = transaction.lock().unwrap();
+    if transaction.mst_a() || !transaction.is_persisted() {
       return Ok(());
     }
     if transaction.id_trunk() != 0 {
@@ -71,10 +70,8 @@ pub fn perform(
       nodes.push_front(transaction.id_branch());
     }
     if transaction.current_idx() == 0 {
-      let mut guard = bundle_mapper.lock();
-      let mut bundle = bundle_mapper
-        .fetch(&mut guard, conn, transaction.id_bundle())?;
-      bundle.set_confirmed(timestamp);
+      let bundle = bundle_mapper.fetch(conn, transaction.id_bundle())?;
+      bundle.lock().unwrap().set_confirmed(timestamp);
     }
     transaction.approve();
     counter += 1;

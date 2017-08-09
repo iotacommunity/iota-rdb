@@ -2,12 +2,14 @@ use mapper;
 use message;
 use mysql;
 use query;
+use record;
 use std::{error, fmt, result, time};
 
 #[derive(Debug)]
 pub enum Error {
   Message(message::Error),
   Query(query::Error),
+  Record(record::Error),
   Mapper(mapper::Error),
   SystemTime(time::SystemTimeError),
 }
@@ -19,6 +21,7 @@ impl fmt::Display for Error {
     match *self {
       Error::Message(ref err) => write!(f, "Message error: {}", err),
       Error::Query(ref err) => write!(f, "Query error: {}", err),
+      Error::Record(ref err) => write!(f, "Record error: {}", err),
       Error::Mapper(ref err) => write!(f, "Mapper error: {}", err),
       Error::SystemTime(ref err) => write!(f, "SystemTime error: {}", err),
     }
@@ -30,6 +33,7 @@ impl error::Error for Error {
     match *self {
       Error::Message(ref err) => err.description(),
       Error::Query(ref err) => err.description(),
+      Error::Record(ref err) => err.description(),
       Error::Mapper(ref err) => err.description(),
       Error::SystemTime(ref err) => err.description(),
     }
@@ -39,6 +43,7 @@ impl error::Error for Error {
     match *self {
       Error::Message(ref err) => Some(err),
       Error::Query(ref err) => Some(err),
+      Error::Record(ref err) => Some(err),
       Error::Mapper(ref err) => Some(err),
       Error::SystemTime(ref err) => Some(err),
     }
@@ -48,6 +53,12 @@ impl error::Error for Error {
 impl From<query::Error> for Error {
   fn from(err: query::Error) -> Error {
     Error::Query(err)
+  }
+}
+
+impl From<record::Error> for Error {
+  fn from(err: record::Error) -> Error {
+    Error::Record(err)
   }
 }
 

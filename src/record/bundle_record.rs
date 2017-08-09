@@ -1,11 +1,10 @@
 use super::{Error, Record, Result};
 use mysql;
-use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct BundleRecord {
   locked: bool,
-  persistent: bool,
+  persisted: bool,
   modified: bool,
   bundle: String,
   id_bundle: u64,
@@ -24,13 +23,12 @@ const SELECT_QUERY: &str = r#"
   FROM bundle
 "#;
 
-const WHERE_BUNDLE: &str = r"WHERE bundle = ?";
-
 impl Record for BundleRecord {
   define_record!();
 
   const SELECT_QUERY: &'static str = SELECT_QUERY;
   const SELECT_WHERE_ID: &'static str = r"WHERE id_bundle = ?";
+  const SELECT_WHERE_HASH: &'static str = r"WHERE bundle = ?";
 
   const INSERT_QUERY: &'static str = r#"
     INSERT INTO bundle (
@@ -59,7 +57,7 @@ impl Record for BundleRecord {
   fn from_row(row: &mut mysql::Row) -> Result<Self> {
     Ok(Self {
       locked: false,
-      persistent: true,
+      persisted: true,
       modified: false,
       bundle: row.take_opt("bundle").ok_or(Error::ColumnNotFound)??,
       id_bundle: row.take_opt("id_bundle").ok_or(Error::ColumnNotFound)??,
@@ -78,6 +76,14 @@ impl Record for BundleRecord {
       "confirmed" => self.confirmed,
     }
   }
+
+  fn id(&self) -> u64 {
+    self.id_bundle
+  }
+
+  fn hash(&self) -> &str {
+    &self.bundle
+  }
 }
 
 impl BundleRecord {
@@ -90,7 +96,7 @@ impl BundleRecord {
   pub fn new(id_bundle: u64, bundle: String, size: i32, created: f64) -> Self {
     Self {
       locked: false,
-      persistent: false,
+      persisted: false,
       modified: true,
       bundle,
       id_bundle,
@@ -98,26 +104,5 @@ impl BundleRecord {
       size,
       confirmed: 0.0,
     }
-  }
-
-  pub fn find_by_bundle(
-    conn: &mut mysql::Conn,
-    hash: &str,
-  ) -> Result<Option<BundleRecord>> {
-    match conn
-      .first_exec(format!("{} {}", SELECT_QUERY, WHERE_BUNDLE), (hash,))?
-    {
-      Some(ref mut row) => Ok(Some(Self::from_row(row)?)),
-      None => Ok(None),
-    }
-  }
-
-  pub fn store(
-    self,
-    records: &mut HashMap<u64, BundleRecord>,
-    hashes: &mut HashMap<String, u64>,
-  ) {
-    hashes.insert(self.bundle().to_owned(), self.id_bundle());
-    records.insert(self.id_bundle(), self);
   }
 }

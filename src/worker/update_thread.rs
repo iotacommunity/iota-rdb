@@ -54,14 +54,8 @@ pub fn perform(
   address_mapper: &AddressMapper,
   bundle_mapper: &BundleMapper,
 ) -> Result<()> {
-  update(transaction_mapper, conn)?;
-  update(address_mapper, conn)?;
-  update(bundle_mapper, conn)?;
-  Ok(())
-}
-
-fn update<T: Mapper>(mapper: &T, conn: &mut mysql::Conn) -> Result<()> {
-  let mut guard = mapper.lock();
-  mapper.update(&mut guard, conn)?;
+  transaction_mapper.update(conn)?;
+  address_mapper.update(conn)?;
+  bundle_mapper.update(conn)?;
   Ok(())
 }

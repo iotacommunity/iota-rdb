@@ -19,32 +19,20 @@ macro_rules! define_accessors {
 
 macro_rules! define_record {
   () => {
-    fn is_persistent(&self) -> bool {
-      self.persistent
+    fn is_persisted(&self) -> bool {
+      self.persisted
     }
 
     fn is_modified(&self) -> bool {
       self.modified
     }
 
-    fn is_locked(&self) -> bool {
-      self.locked
-    }
-
-    fn set_persistent(&mut self, value: bool) {
-      self.persistent = value;
+    fn set_persisted(&mut self, value: bool) {
+      self.persisted = value;
     }
 
     fn set_modified(&mut self, value: bool) {
       self.modified = value;
-    }
-
-    fn lock(&mut self) {
-      self.locked = true;
-    }
-
-    fn unlock(&mut self) {
-      self.locked = false;
     }
   };
 }
