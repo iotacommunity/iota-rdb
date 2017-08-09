@@ -1,7 +1,7 @@
 use super::Result;
+use event;
 use mapper::{BundleMapper, Mapper, TransactionMapper};
 use mysql;
-use query::event;
 use record::Record;
 use std::collections::VecDeque;
 use std::sync::{mpsc, Arc};

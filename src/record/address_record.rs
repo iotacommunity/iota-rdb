@@ -54,8 +54,9 @@ impl Record for AddressRecord {
       modified: false,
       address: row.take_opt("address").ok_or(Error::ColumnNotFound)??,
       id_address: row.take_opt("id_address").ok_or(Error::ColumnNotFound)??,
-      // TODO optional
-      checksum: row.take_opt("checksum").ok_or(Error::ColumnNotFound)??,
+      checksum: row
+        .take_opt("checksum")
+        .unwrap_or_else(|| Ok(String::from("")))?,
     })
   }
 

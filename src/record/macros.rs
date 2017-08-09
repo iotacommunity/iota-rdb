@@ -1,7 +1,7 @@
 macro_rules! define_setter {
-  ($name:ident, $setter:ident, $type:ty) => {
+  ($name:ident, $set_name:ident, $type:ty) => {
     #[allow(dead_code, float_cmp)]
-    pub fn $setter(&mut self, value: $type) {
+    pub fn $set_name(&mut self, value: $type) {
       if self.$name != value {
         self.modified = true;
         self.$name = value;
@@ -11,9 +11,9 @@ macro_rules! define_setter {
 }
 
 macro_rules! define_accessors {
-  ($name:ident, $setter:ident, $type:ty) => {
+  ($name:ident, $set_name:ident, $type:ty) => {
     define_getter!($name, $type);
-    define_setter!($name, $setter, $type);
+    define_setter!($name, $set_name, $type);
   };
 }
 

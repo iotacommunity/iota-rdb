@@ -1,17 +1,21 @@
-use super::{Mapper, Result};
+use super::Mapper;
 use counter::Counter;
-use record::BundleRecord;
-use std::collections::hash_map::HashMap;
+use record::{BundleRecord, Result};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
+
+type Records = RwLock<HashMap<u64, Arc<Mutex<BundleRecord>>>>;
+type Hashes = RwLock<HashMap<String, u64>>;
 
 pub struct BundleMapper {
   counter: Arc<Counter>,
-  records: RwLock<HashMap<u64, Arc<Mutex<BundleRecord>>>>,
-  hashes: RwLock<HashMap<String, u64>>,
+  records: Records,
+  hashes: Hashes,
 }
 
-impl Mapper for BundleMapper {
+impl<'a> Mapper<'a> for BundleMapper {
   type Record = BundleRecord;
+  type Indices = ();
 
   fn new(counter: Arc<Counter>) -> Result<Self> {
     let records = RwLock::new(HashMap::new());
@@ -23,13 +27,17 @@ impl Mapper for BundleMapper {
     })
   }
 
-  fn records(&self) -> &RwLock<HashMap<u64, Arc<Mutex<BundleRecord>>>> {
+  fn records(&self) -> &Records {
     &self.records
   }
 
-  fn hashes(&self) -> &RwLock<HashMap<String, u64>> {
+  fn hashes(&self) -> &Hashes {
     &self.hashes
   }
+
+  fn indices(&self) {}
+
+  fn store_indices(_indices: (), _record: &BundleRecord) {}
 
   fn next_counter(&self) -> u64 {
     self.counter.next_bundle()

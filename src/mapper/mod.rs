@@ -1,21 +1,20 @@
 mod transaction_mapper;
 mod address_mapper;
 mod bundle_mapper;
-mod error;
 
 pub use self::address_mapper::AddressMapper;
 pub use self::bundle_mapper::BundleMapper;
-pub use self::error::{Error, Result};
 pub use self::transaction_mapper::TransactionMapper;
 
 use counter::Counter;
 use mysql;
-use record::{self, Record};
-use std::collections::hash_map::HashMap;
+use record::{self, Record, Result};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 
-pub trait Mapper: Sized {
+pub trait Mapper<'a>: Sized {
   type Record: Record;
+  type Indices;
 
   fn new(counter: Arc<Counter>) -> Result<Self>;
 
@@ -23,10 +22,14 @@ pub trait Mapper: Sized {
 
   fn hashes(&self) -> &RwLock<HashMap<String, u64>>;
 
+  fn indices(&'a self) -> Self::Indices;
+
+  fn store_indices(indices: Self::Indices, record: &Self::Record);
+
   fn next_counter(&self) -> u64;
 
   fn fetch(
-    &self,
+    &'a self,
     conn: &mut mysql::Conn,
     id: u64,
   ) -> Result<Arc<Mutex<Self::Record>>> {
@@ -40,13 +43,15 @@ pub trait Mapper: Sized {
         let record = Self::Record::find_by_id(conn, id)?;
         let mut records = self.records().write().unwrap();
         let mut hashes = self.hashes().write().unwrap();
-        Ok(Self::store_and_clone(&mut records, &mut hashes, record))
+        let (_, record) =
+          Self::store(&mut records, &mut hashes, self.indices(), record);
+        Ok(record.clone())
       }
     }
   }
 
   fn fetch_or_insert<T>(
-    &self,
+    &'a self,
     conn: &mut mysql::Conn,
     hash: &str,
     f: T,
@@ -67,36 +72,27 @@ pub trait Mapper: Sized {
         };
         let mut records = self.records().write().unwrap();
         let mut hashes = self.hashes().write().unwrap();
-        Ok(Self::store(&mut records, &mut hashes, record))
+        let (id, _) =
+          Self::store(&mut records, &mut hashes, self.indices(), record);
+        Ok(id)
       }
     }
   }
 
-  fn store_and_clone(
-    records: &mut HashMap<u64, Arc<Mutex<Self::Record>>>,
+  fn store<'b>(
+    records: &'b mut HashMap<u64, Arc<Mutex<Self::Record>>>,
     hashes: &mut HashMap<String, u64>,
+    indices: Self::Indices,
     record: Self::Record,
-  ) -> Arc<Mutex<Self::Record>> {
-    records
-      .entry(record.id())
-      .or_insert_with(|| {
+  ) -> (u64, &'b Arc<Mutex<Self::Record>>) {
+    (
+      record.id(),
+      records.entry(record.id()).or_insert_with(|| {
         hashes.insert(record.hash().to_owned(), record.id());
+        Self::store_indices(indices, &record);
         Arc::new(Mutex::new(record))
-      })
-      .clone()
-  }
-
-  fn store(
-    records: &mut HashMap<u64, Arc<Mutex<Self::Record>>>,
-    hashes: &mut HashMap<String, u64>,
-    record: Self::Record,
-  ) -> u64 {
-    let id = record.id();
-    records.entry(id).or_insert_with(|| {
-      hashes.insert(record.hash().to_owned(), id);
-      Arc::new(Mutex::new(record))
-    });
-    id
+      }),
+    )
   }
 
   fn update(&self, conn: &mut mysql::Conn) -> Result<()> {

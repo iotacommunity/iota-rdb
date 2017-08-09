@@ -124,7 +124,7 @@ impl Record for TransactionRecord {
       id_branch: Self::take_column(row, "id_branch", 0)?,
       id_address: Self::take_column(row, "id_address", 0)?,
       id_bundle: Self::take_column(row, "id_bundle", 0)?,
-      tag: row.take_opt("tag").ok_or(Error::ColumnNotFound)??, // TODO optional
+      tag: row.take_opt("tag").unwrap_or_else(|| Ok(String::from("")))?,
       value: Self::take_column(row, "value", 0)?,
       timestamp: Self::take_column(row, "timestamp", 0.0)?,
       current_idx: Self::take_column(row, "current_idx", 0)?,

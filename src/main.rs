@@ -19,7 +19,7 @@ mod message;
 mod counter;
 mod record;
 mod mapper;
-mod query;
+mod event;
 mod utils;
 
 use args::Args;
@@ -95,6 +95,7 @@ fn main() {
   let solidate_thread = SolidateThread {
     solidate_rx,
     mysql_uri,
+    transaction_mapper: transaction_mapper.clone(),
   };
   let zmq_loop = ZmqLoop { socket, insert_tx };
 

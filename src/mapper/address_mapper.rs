@@ -1,17 +1,21 @@
-use super::{Mapper, Result};
+use super::Mapper;
 use counter::Counter;
-use record::AddressRecord;
-use std::collections::hash_map::HashMap;
+use record::{AddressRecord, Result};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
+
+type Records = RwLock<HashMap<u64, Arc<Mutex<AddressRecord>>>>;
+type Hashes = RwLock<HashMap<String, u64>>;
 
 pub struct AddressMapper {
   counter: Arc<Counter>,
-  records: RwLock<HashMap<u64, Arc<Mutex<AddressRecord>>>>,
-  hashes: RwLock<HashMap<String, u64>>,
+  records: Records,
+  hashes: Hashes,
 }
 
-impl Mapper for AddressMapper {
+impl<'a> Mapper<'a> for AddressMapper {
   type Record = AddressRecord;
+  type Indices = ();
 
   fn new(counter: Arc<Counter>) -> Result<Self> {
     let records = RwLock::new(HashMap::new());
@@ -23,13 +27,17 @@ impl Mapper for AddressMapper {
     })
   }
 
-  fn records(&self) -> &RwLock<HashMap<u64, Arc<Mutex<AddressRecord>>>> {
+  fn records(&self) -> &Records {
     &self.records
   }
 
-  fn hashes(&self) -> &RwLock<HashMap<String, u64>> {
+  fn hashes(&self) -> &Hashes {
     &self.hashes
   }
+
+  fn indices(&self) {}
+
+  fn store_indices(_indices: (), _record: &AddressRecord) {}
 
   fn next_counter(&self) -> u64 {
     self.counter.next_address()

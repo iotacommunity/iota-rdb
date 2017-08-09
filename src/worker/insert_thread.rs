@@ -1,8 +1,8 @@
 use super::Result;
+use event;
 use mapper::{AddressMapper, BundleMapper, Mapper, TransactionMapper};
 use message::TransactionMessage;
 use mysql;
-use query::event;
 use record::{AddressRecord, BundleRecord, Record, TransactionRecord};
 use std::collections::VecDeque;
 use std::sync::{mpsc, Arc, MutexGuard};
@@ -134,9 +134,19 @@ pub fn perform(
       solidate_genesis(branch_tx, null_hash);
       branch_tx.direct_approve();
     }
-    let solid = calc_solid(message.solid(), trunk_tx, &branch_tx);
+    let mut solid = message.solid();
+    if trunk_tx.solid() == 0b11 {
+      solid |= 0b10;
+    }
+    if map_branch(trunk_tx, &branch_tx, TransactionRecord::solid) == 0b11 {
+      solid |= 0b01;
+    }
     current_tx.set_solid(solid);
-    current_tx.set_height(calc_height(trunk_tx, solid));
+    if solid != 0b11 && trunk_tx.solid() == 0b11 {
+      current_tx.set_height(trunk_tx.height() + 1);
+    } else {
+      current_tx.set_height(0);
+    }
     current_tx.set_tag(message.tag().to_owned());
     current_tx.set_value(message.value());
     current_tx.set_timestamp(message.timestamp());
@@ -207,28 +217,6 @@ fn unwrap_transactions<'a>(
 fn solidate_genesis(tx: &mut TransactionRecord, null_hash: &str) {
   if !tx.is_persisted() && tx.hash() == null_hash {
     tx.set_solid(0b11);
-  }
-}
-
-fn calc_solid(
-  mut solid: u8,
-  trunk_tx: &mut TransactionRecord,
-  branch_tx: &Option<&mut TransactionRecord>,
-) -> u8 {
-  if trunk_tx.solid() == 0b11 {
-    solid |= 0b10;
-  }
-  if map_branch(trunk_tx, branch_tx, TransactionRecord::solid) == 0b11 {
-    solid |= 0b01;
-  }
-  solid
-}
-
-fn calc_height(trunk_tx: &TransactionRecord, solid: u8) -> i32 {
-  if solid != 0b11 && trunk_tx.solid() == 0b11 {
-    trunk_tx.height() + 1
-  } else {
-    0
   }
 }
 

@@ -1,4 +1,3 @@
-use super::Result;
 use mysql;
 
 const QUERY: &str = r#"
@@ -12,7 +11,7 @@ const QUERY: &str = r#"
 pub fn new_transaction_received(
   conn: &mut mysql::Conn,
   timestamp: f64,
-) -> Result<()> {
+) -> mysql::Result<()> {
   conn.prep_exec(
     QUERY,
     params!{
@@ -27,7 +26,7 @@ pub fn new_transaction_received(
 pub fn milestone_received(
   conn: &mut mysql::Conn,
   timestamp: f64,
-) -> Result<()> {
+) -> mysql::Result<()> {
   conn.prep_exec(
     QUERY,
     params!{
@@ -43,7 +42,7 @@ pub fn subtangle_confirmation(
   conn: &mut mysql::Conn,
   timestamp: f64,
   count: i32,
-) -> Result<()> {
+) -> mysql::Result<()> {
   conn.prep_exec(
     QUERY,
     params!{
@@ -58,7 +57,7 @@ pub fn subtangle_confirmation(
 pub fn unsolid_transaction(
   conn: &mut mysql::Conn,
   timestamp: f64,
-) -> Result<()> {
+) -> mysql::Result<()> {
   conn.prep_exec(
     QUERY,
     params!{
@@ -74,7 +73,7 @@ pub fn subtangle_solidation(
   conn: &mut mysql::Conn,
   timestamp: f64,
   count: i32,
-) -> Result<()> {
+) -> mysql::Result<()> {
   conn.prep_exec(
     QUERY,
     params!{
