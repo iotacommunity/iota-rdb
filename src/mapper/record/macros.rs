@@ -1,13 +1,15 @@
 macro_rules! define_setter {
   ($name:ident, $set_name:ident, $type:ty, in $restricted:path) => {
-    #[allow(dead_code, float_cmp)]
+    #[cfg_attr(feature = "clippy", allow(float_cmp))]
+    #[allow(dead_code)]
     pub(in $restricted) fn $set_name(&mut self, value: $type) {
       define_setter!(body, $name, self, value);
     }
   };
 
   ($name:ident, $set_name:ident, $type:ty) => {
-    #[allow(dead_code, float_cmp)]
+    #[cfg_attr(feature = "clippy", allow(float_cmp))]
+    #[allow(dead_code)]
     pub fn $set_name(&mut self, value: $type) {
       define_setter!(body, $name, self, value);
     }
