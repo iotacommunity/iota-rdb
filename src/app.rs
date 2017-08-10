@@ -1,5 +1,6 @@
 use clap::{App, Arg};
 
+const DEFAULT_UPDATE_INTERVAL: &str = "1000";
 const DEFAULT_MILESTONE_ADDRESS: &str =
   "KPWCHICGJZXKE9GSUDXZYUAPLHAKAHYHDXNPHENTE\
    RYMMBQOPSQIDENXKLKCEYCPVTZQLEEJVYJZV9BWU";
@@ -24,6 +25,15 @@ pub fn build<'a, 'b>() -> App<'a, 'b> {
         .value_name("URI")
         .required(true)
         .help("MySQL destination server URI"),
+    )
+    .arg(
+      Arg::with_name("update_interval")
+        .short("u")
+        .long("update-interval")
+        .takes_value(true)
+        .value_name("INTERVAL")
+        .default_value(DEFAULT_UPDATE_INTERVAL)
+        .help("MySQL update interval in milliseconds"),
     )
     .arg(
       Arg::with_name("milestone_address")

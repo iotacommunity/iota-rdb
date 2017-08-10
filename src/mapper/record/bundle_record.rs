@@ -3,7 +3,6 @@ use mysql;
 
 #[derive(Clone)]
 pub struct BundleRecord {
-  locked: bool,
   persisted: bool,
   modified: bool,
   bundle: String,
@@ -56,7 +55,6 @@ impl Record for BundleRecord {
 
   fn from_row(row: &mut mysql::Row) -> Result<Self> {
     Ok(Self {
-      locked: false,
       persisted: true,
       modified: false,
       bundle: row.take_opt("bundle").ok_or(Error::ColumnNotFound)??,
@@ -95,7 +93,6 @@ impl BundleRecord {
 
   pub fn new(id_bundle: u64, bundle: String, size: i32, created: f64) -> Self {
     Self {
-      locked: false,
       persisted: false,
       modified: true,
       bundle,

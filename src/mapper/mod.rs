@@ -91,7 +91,7 @@ pub trait Mapper<'a>: Sized {
     };
     for record in records {
       let mut record = record.lock().unwrap();
-      if record.is_modified() {
+      if record.is_persisted() && record.is_modified() {
         record.update(conn)?;
       }
     }

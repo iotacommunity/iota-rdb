@@ -4,7 +4,6 @@ use solid::Solid;
 
 #[derive(Clone)]
 pub struct TransactionRecord {
-  locked: bool,
   persisted: bool,
   modified: bool,
   hash: String,
@@ -114,7 +113,6 @@ impl Record for TransactionRecord {
 
   fn from_row(row: &mut mysql::Row) -> Result<Self> {
     Ok(Self {
-      locked: false,
       persisted: true,
       modified: false,
       hash: row.take_opt("hash").ok_or(Error::ColumnNotFound)??,
@@ -187,7 +185,6 @@ impl TransactionRecord {
 
   pub fn placeholder(hash: String, id_tx: u64) -> Self {
     Self {
-      locked: false,
       persisted: false,
       modified: true,
       hash,

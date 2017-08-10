@@ -5,10 +5,9 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-const UPDATE_INTERVAL: u64 = 500;
-
 pub struct UpdateThread<'a> {
   pub mysql_uri: &'a str,
+  pub update_interval: u64,
   pub transaction_mapper: Arc<TransactionMapper>,
   pub address_mapper: Arc<AddressMapper>,
   pub bundle_mapper: Arc<BundleMapper>,
@@ -18,10 +17,12 @@ impl<'a> UpdateThread<'a> {
   pub fn spawn(self, verbose: bool) {
     let Self {
       mysql_uri,
+      update_interval,
       transaction_mapper,
       address_mapper,
       bundle_mapper,
     } = self;
+    let update_interval = Duration::from_millis(update_interval);
     let mut conn =
       mysql::Conn::new(mysql_uri).expect("MySQL connection failure");
     thread::spawn(move || {
@@ -29,7 +30,7 @@ impl<'a> UpdateThread<'a> {
       let address_mapper = &*address_mapper;
       let bundle_mapper = &*bundle_mapper;
       loop {
-        thread::sleep(Duration::from_millis(UPDATE_INTERVAL));
+        thread::sleep(update_interval);
         match perform(
           &mut conn,
           transaction_mapper,

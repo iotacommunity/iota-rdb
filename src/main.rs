@@ -39,6 +39,7 @@ fn main() {
   let Args {
     zmq_uri,
     mysql_uri,
+    update_interval,
     milestone_address,
     milestone_start_index,
     verbose,
@@ -82,6 +83,7 @@ fn main() {
   };
   let update_thread = UpdateThread {
     mysql_uri,
+    update_interval,
     transaction_mapper: transaction_mapper.clone(),
     address_mapper: address_mapper.clone(),
     bundle_mapper: bundle_mapper.clone(),

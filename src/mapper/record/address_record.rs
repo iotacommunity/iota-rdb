@@ -6,7 +6,6 @@ use mysql;
 
 #[derive(Clone)]
 pub struct AddressRecord {
-  locked: bool,
   persisted: bool,
   modified: bool,
   address: String,
@@ -49,7 +48,6 @@ impl Record for AddressRecord {
 
   fn from_row(row: &mut mysql::Row) -> Result<Self> {
     Ok(Self {
-      locked: false,
       persisted: true,
       modified: false,
       address: row.take_opt("address").ok_or(Error::ColumnNotFound)??,
@@ -86,7 +84,6 @@ impl AddressRecord {
   pub fn new(id_address: u64, address: String) -> Result<Self> {
     let checksum = calculate_checksum(&address)?;
     Ok(Self {
-      locked: false,
       persisted: false,
       modified: true,
       address,

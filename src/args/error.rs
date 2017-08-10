@@ -3,6 +3,7 @@ use std::{error, fmt, num, result};
 #[derive(Debug)]
 pub enum Error {
   ArgNotFound,
+  UpdateIntervalParseInt(num::ParseIntError),
   MilestoneStartIndexParseInt(num::ParseIntError),
   MilestoneStartIndexToTrits,
 }
@@ -13,6 +14,9 @@ impl fmt::Display for Error {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match *self {
       Error::ArgNotFound => write!(f, "Argument not found"),
+      Error::UpdateIntervalParseInt(ref err) => {
+        write!(f, "{} (update-interval)", err)
+      }
       Error::MilestoneStartIndexParseInt(ref err) => {
         write!(f, "{} (milestone-start-index)", err)
       }
@@ -27,6 +31,7 @@ impl error::Error for Error {
   fn description(&self) -> &str {
     match *self {
       Error::ArgNotFound => "Argument not found",
+      Error::UpdateIntervalParseInt(ref err) |
       Error::MilestoneStartIndexParseInt(ref err) => err.description(),
       Error::MilestoneStartIndexToTrits => "Can't convert to trits",
     }
@@ -35,6 +40,7 @@ impl error::Error for Error {
   fn cause(&self) -> Option<&error::Error> {
     match *self {
       Error::ArgNotFound | Error::MilestoneStartIndexToTrits => None,
+      Error::UpdateIntervalParseInt(ref err) |
       Error::MilestoneStartIndexParseInt(ref err) => Some(err),
     }
   }

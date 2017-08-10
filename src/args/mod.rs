@@ -8,6 +8,7 @@ use utils;
 pub struct Args<'a> {
   pub zmq_uri: &'a str,
   pub mysql_uri: &'a str,
+  pub update_interval: u64,
   pub milestone_address: &'a str,
   pub milestone_start_index: String,
   pub verbose: bool,
@@ -17,6 +18,11 @@ impl<'a> Args<'a> {
   pub fn parse(matches: &'a ArgMatches<'a>) -> Result<Self> {
     let zmq_uri = matches.value_of("zmq_uri").ok_or(Error::ArgNotFound)?;
     let mysql_uri = matches.value_of("mysql_uri").ok_or(Error::ArgNotFound)?;
+    let update_interval = matches
+      .value_of("update_interval")
+      .ok_or(Error::ArgNotFound)?
+      .parse()
+      .map_err(Error::UpdateIntervalParseInt)?;
     let milestone_address = matches
       .value_of("milestone_address")
       .ok_or(Error::ArgNotFound)?;
@@ -33,6 +39,7 @@ impl<'a> Args<'a> {
     Ok(Self {
       zmq_uri,
       mysql_uri,
+      update_interval,
       milestone_address,
       milestone_start_index,
       verbose,
