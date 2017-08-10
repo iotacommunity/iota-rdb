@@ -17,7 +17,6 @@ mod args;
 mod worker;
 mod message;
 mod counter;
-mod record;
 mod mapper;
 mod event;
 mod utils;

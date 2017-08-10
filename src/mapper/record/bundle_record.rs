@@ -1,4 +1,4 @@
-use super::{Error, Record, Result};
+use super::super::{Error, Record, Result};
 use mysql;
 
 #[derive(Clone)]
@@ -61,9 +61,9 @@ impl Record for BundleRecord {
       modified: false,
       bundle: row.take_opt("bundle").ok_or(Error::ColumnNotFound)??,
       id_bundle: row.take_opt("id_bundle").ok_or(Error::ColumnNotFound)??,
-      created: Self::take_column(row, "created", 0.0)?,
-      size: Self::take_column(row, "size", 0)?,
-      confirmed: Self::take_column(row, "confirmed", 0.0)?,
+      created: row.take_opt("created").unwrap_or_else(|| Ok(0.0))?,
+      size: row.take_opt("size").unwrap_or_else(|| Ok(0))?,
+      confirmed: row.take_opt("confirmed").unwrap_or_else(|| Ok(0.0))?,
     })
   }
 

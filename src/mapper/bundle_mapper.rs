@@ -1,6 +1,5 @@
-use super::Mapper;
+use super::{BundleRecord, Mapper, Result};
 use counter::Counter;
-use record::{BundleRecord, Result};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 
@@ -37,7 +36,7 @@ impl<'a> Mapper<'a> for BundleMapper {
 
   fn indices(&self) {}
 
-  fn store_indices(_indices: (), _record: &BundleRecord) {}
+  fn store_indices(_indices: &mut (), _record: &BundleRecord) {}
 
   fn next_counter(&self) -> u64 {
     self.counter.next_bundle()

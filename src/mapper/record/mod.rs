@@ -3,12 +3,12 @@ mod macros;
 mod transaction_record;
 mod address_record;
 mod bundle_record;
-mod error;
 
 pub use self::address_record::AddressRecord;
 pub use self::bundle_record::BundleRecord;
-pub use self::error::{Error, Result};
 pub use self::transaction_record::TransactionRecord;
+
+use super::{Error, Result};
 
 use mysql;
 
@@ -52,16 +52,6 @@ pub trait Record: Sized {
     conn.prep_exec(Self::UPDATE_QUERY, self.to_params())?;
     self.set_modified(false);
     Ok(())
-  }
-
-  fn take_column<T>(row: &mut mysql::Row, column: &str, default: T) -> Result<T>
-  where
-    T: mysql::value::FromValue,
-  {
-    match row.take_opt(column) {
-      Some(value) => Ok(value?),
-      None => Ok(default),
-    }
   }
 
   fn to_params(&self) -> Vec<(String, mysql::Value)>;

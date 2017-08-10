@@ -1,9 +1,9 @@
 use super::Result;
 use event;
-use mapper::{AddressMapper, BundleMapper, Mapper, TransactionMapper};
+use mapper::{AddressMapper, AddressRecord, BundleMapper, BundleRecord, Mapper,
+             Record, TransactionMapper, TransactionRecord};
 use message::TransactionMessage;
 use mysql;
-use record::{AddressRecord, BundleRecord, Record, TransactionRecord};
 use std::collections::VecDeque;
 use std::sync::{mpsc, Arc, MutexGuard};
 use std::thread;
@@ -154,8 +154,8 @@ pub fn perform(
     current_tx.set_last_idx(message.last_index());
     current_tx.set_is_mst(message.is_milestone());
     current_tx.set_mst_a(message.is_milestone());
-    current_tx.set_id_trunk(trunk_tx.id_tx());
-    current_tx.set_id_branch(id_branch);
+    transaction_mapper.set_trunk(current_tx, trunk_tx.id_tx());
+    transaction_mapper.set_branch(current_tx, id_branch);
     current_tx.set_id_address(id_address);
     current_tx.set_id_bundle(id_bundle);
     if solid != 0b11 {

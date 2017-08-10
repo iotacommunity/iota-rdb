@@ -1,13 +1,24 @@
 macro_rules! define_setter {
+  ($name:ident, $set_name:ident, $type:ty, in $restricted:path) => {
+    #[allow(dead_code, float_cmp)]
+    pub(in $restricted) fn $set_name(&mut self, value: $type) {
+      define_setter!(body, $name, self, value);
+    }
+  };
+
   ($name:ident, $set_name:ident, $type:ty) => {
     #[allow(dead_code, float_cmp)]
     pub fn $set_name(&mut self, value: $type) {
-      if self.$name != value {
-        self.modified = true;
-        self.$name = value;
-      }
+      define_setter!(body, $name, self, value);
     }
   };
+
+  (body, $name:ident, $self:ident, $value:ident) => {
+    if $self.$name != $value {
+      $self.modified = true;
+      $self.$name = $value;
+    }
+  }
 }
 
 macro_rules! define_accessors {

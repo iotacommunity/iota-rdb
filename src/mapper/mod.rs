@@ -1,14 +1,17 @@
 mod transaction_mapper;
 mod address_mapper;
 mod bundle_mapper;
+mod record;
+mod error;
 
 pub use self::address_mapper::AddressMapper;
 pub use self::bundle_mapper::BundleMapper;
+pub use self::error::{Error, Result};
+pub use self::record::{AddressRecord, BundleRecord, Record, TransactionRecord};
 pub use self::transaction_mapper::TransactionMapper;
 
 use counter::Counter;
 use mysql;
-use record::{self, Record, Result};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 
@@ -24,7 +27,7 @@ pub trait Mapper<'a>: Sized {
 
   fn indices(&'a self) -> Self::Indices;
 
-  fn store_indices(indices: Self::Indices, record: &Self::Record);
+  fn store_indices(indices: &mut Self::Indices, record: &Self::Record);
 
   fn next_counter(&self) -> u64;
 
@@ -43,8 +46,9 @@ pub trait Mapper<'a>: Sized {
         let record = Self::Record::find_by_id(conn, id)?;
         let mut records = self.records().write().unwrap();
         let mut hashes = self.hashes().write().unwrap();
+        let mut indices = self.indices();
         let (_, record) =
-          Self::store(&mut records, &mut hashes, self.indices(), record);
+          Self::store(&mut records, &mut hashes, &mut indices, record);
         Ok(record.clone())
       }
     }
@@ -57,7 +61,7 @@ pub trait Mapper<'a>: Sized {
     f: T,
   ) -> Result<u64>
   where
-    T: FnOnce(u64) -> record::Result<Self::Record>,
+    T: FnOnce(u64) -> Result<Self::Record>,
   {
     let cached = {
       let hashes = self.hashes().read().unwrap();
@@ -72,27 +76,12 @@ pub trait Mapper<'a>: Sized {
         };
         let mut records = self.records().write().unwrap();
         let mut hashes = self.hashes().write().unwrap();
+        let mut indices = self.indices();
         let (id, _) =
-          Self::store(&mut records, &mut hashes, self.indices(), record);
+          Self::store(&mut records, &mut hashes, &mut indices, record);
         Ok(id)
       }
     }
-  }
-
-  fn store<'b>(
-    records: &'b mut HashMap<u64, Arc<Mutex<Self::Record>>>,
-    hashes: &mut HashMap<String, u64>,
-    indices: Self::Indices,
-    record: Self::Record,
-  ) -> (u64, &'b Arc<Mutex<Self::Record>>) {
-    (
-      record.id(),
-      records.entry(record.id()).or_insert_with(|| {
-        hashes.insert(record.hash().to_owned(), record.id());
-        Self::store_indices(indices, &record);
-        Arc::new(Mutex::new(record))
-      }),
-    )
   }
 
   fn update(&self, conn: &mut mysql::Conn) -> Result<()> {
@@ -107,5 +96,20 @@ pub trait Mapper<'a>: Sized {
       }
     }
     Ok(())
+  }
+
+  fn store<'b>(
+    records: &'b mut HashMap<u64, Arc<Mutex<Self::Record>>>,
+    hashes: &mut HashMap<String, u64>,
+    indices: &mut Self::Indices,
+    record: Self::Record,
+  ) -> (u64, &'b Arc<Mutex<Self::Record>>) {
+    let id = record.id();
+    let record = records.entry(id).or_insert_with(|| {
+      hashes.insert(record.hash().to_owned(), id);
+      Self::store_indices(indices, &record);
+      Arc::new(Mutex::new(record))
+    });
+    (id, record)
   }
 }

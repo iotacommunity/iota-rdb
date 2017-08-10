@@ -1,6 +1,5 @@
-use super::Mapper;
+use super::{AddressRecord, Mapper, Result};
 use counter::Counter;
-use record::{AddressRecord, Result};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 
@@ -37,7 +36,7 @@ impl<'a> Mapper<'a> for AddressMapper {
 
   fn indices(&self) {}
 
-  fn store_indices(_indices: (), _record: &AddressRecord) {}
+  fn store_indices(_indices: &mut (), _record: &AddressRecord) {}
 
   fn next_counter(&self) -> u64 {
     self.counter.next_address()

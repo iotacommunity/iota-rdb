@@ -1,8 +1,7 @@
 use super::Result;
 use event;
-use mapper::{BundleMapper, Mapper, TransactionMapper};
+use mapper::{BundleMapper, Mapper, Record, TransactionMapper};
 use mysql;
-use record::Record;
 use std::collections::VecDeque;
 use std::sync::{mpsc, Arc};
 use std::thread;
@@ -63,11 +62,11 @@ pub fn perform(
     if transaction.mst_a() || !transaction.is_persisted() {
       return Ok(());
     }
-    if transaction.id_trunk() != 0 {
-      nodes.push_front(transaction.id_trunk());
+    if let Some(id_trunk) = transaction.id_trunk() {
+      nodes.push_front(id_trunk);
     }
-    if transaction.id_branch() != 0 {
-      nodes.push_front(transaction.id_branch());
+    if let Some(id_branch) = transaction.id_branch() {
+      nodes.push_front(id_branch);
     }
     if transaction.current_idx() == 0 {
       let bundle = bundle_mapper.fetch(conn, transaction.id_bundle())?;

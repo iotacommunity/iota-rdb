@@ -1,4 +1,4 @@
-use super::{Error, Record, Result};
+use super::super::{Error, Record, Result};
 use mysql;
 
 #[derive(Clone)]
@@ -8,8 +8,8 @@ pub struct TransactionRecord {
   modified: bool,
   hash: String,
   id_tx: u64,
-  id_trunk: u64,
-  id_branch: u64,
+  id_trunk: Option<u64>,
+  id_branch: Option<u64>,
   id_address: u64,
   id_bundle: u64,
   tag: String,
@@ -96,8 +96,6 @@ impl Record for TransactionRecord {
 
   const UPDATE_QUERY: &'static str = r#"
     UPDATE tx SET
-      id_trunk = :id_trunk,
-      id_branch = :id_branch,
       id_address = :id_address,
       id_bundle = :id_bundle,
       tag = :tag,
@@ -120,20 +118,20 @@ impl Record for TransactionRecord {
       modified: false,
       hash: row.take_opt("hash").ok_or(Error::ColumnNotFound)??,
       id_tx: row.take_opt("id_tx").ok_or(Error::ColumnNotFound)??,
-      id_trunk: Self::take_column(row, "id_trunk", 0)?,
-      id_branch: Self::take_column(row, "id_branch", 0)?,
-      id_address: Self::take_column(row, "id_address", 0)?,
-      id_bundle: Self::take_column(row, "id_bundle", 0)?,
+      id_trunk: row.take_opt("id_trunk").unwrap_or_else(|| Ok(None))?,
+      id_branch: row.take_opt("id_branch").unwrap_or_else(|| Ok(None))?,
+      id_address: row.take_opt("id_address").unwrap_or_else(|| Ok(0))?,
+      id_bundle: row.take_opt("id_bundle").unwrap_or_else(|| Ok(0))?,
       tag: row.take_opt("tag").unwrap_or_else(|| Ok(String::from("")))?,
-      value: Self::take_column(row, "value", 0)?,
-      timestamp: Self::take_column(row, "timestamp", 0.0)?,
-      current_idx: Self::take_column(row, "current_idx", 0)?,
-      last_idx: Self::take_column(row, "last_idx", 0)?,
-      da: Self::take_column(row, "da", 0)?,
-      height: Self::take_column(row, "height", 0)?,
-      is_mst: Self::take_column(row, "is_mst", false)?,
-      mst_a: Self::take_column(row, "mst_a", false)?,
-      solid: Self::take_column(row, "solid", 0b00)?,
+      value: row.take_opt("value").unwrap_or_else(|| Ok(0))?,
+      timestamp: row.take_opt("timestamp").unwrap_or_else(|| Ok(0.0))?,
+      current_idx: row.take_opt("current_idx").unwrap_or_else(|| Ok(0))?,
+      last_idx: row.take_opt("last_idx").unwrap_or_else(|| Ok(0))?,
+      da: row.take_opt("da").unwrap_or_else(|| Ok(0))?,
+      height: row.take_opt("height").unwrap_or_else(|| Ok(0))?,
+      is_mst: row.take_opt("is_mst").unwrap_or_else(|| Ok(false))?,
+      mst_a: row.take_opt("mst_a").unwrap_or_else(|| Ok(false))?,
+      solid: row.take_opt("solid").unwrap_or_else(|| Ok(0b00))?,
     })
   }
 
@@ -169,8 +167,10 @@ impl Record for TransactionRecord {
 
 impl TransactionRecord {
   define_getter!(id_tx, u64);
-  define_accessors!(id_trunk, set_id_trunk, u64);
-  define_accessors!(id_branch, set_id_branch, u64);
+  define_getter!(id_trunk, Option<u64>);
+  define_getter!(id_branch, Option<u64>);
+  define_setter!(id_trunk, set_id_trunk, Option<u64>, in super::super);
+  define_setter!(id_branch, set_id_branch, Option<u64>, in super::super);
   define_accessors!(id_address, set_id_address, u64);
   define_accessors!(id_bundle, set_id_bundle, u64);
   define_getter!(tag, &str);
@@ -191,8 +191,8 @@ impl TransactionRecord {
       modified: true,
       hash,
       id_tx,
-      id_trunk: 0,
-      id_branch: 0,
+      id_trunk: None,
+      id_branch: None,
       id_address: 0,
       id_bundle: 0,
       tag: String::from(""),

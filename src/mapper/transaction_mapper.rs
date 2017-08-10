@@ -1,27 +1,26 @@
-use super::Mapper;
+use super::{Mapper, Record, Result, TransactionRecord};
 use counter::Counter;
 use mysql;
-use record::{Record, Result, TransactionRecord};
 use std::collections::HashMap;
 use std::hash::Hash;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex, RwLock, RwLockWriteGuard};
 
 type Records = RwLock<HashMap<u64, Arc<Mutex<TransactionRecord>>>>;
 type Hashes = RwLock<HashMap<String, u64>>;
-type Trunks = RwLock<HashMap<u64, Arc<Mutex<Vec<u64>>>>>;
-type Branches = RwLock<HashMap<u64, Arc<Mutex<Vec<u64>>>>>;
+type Index<K, V> = HashMap<K, Arc<Mutex<Vec<V>>>>;
+type IndexGuard<'a, K, V> = RwLockWriteGuard<'a, Index<K, V>>;
 
 pub struct TransactionMapper {
   counter: Arc<Counter>,
   records: Records,
   hashes: Hashes,
-  trunks: Trunks,
-  branches: Branches,
+  trunks: RwLock<Index<u64, u64>>,
+  branches: RwLock<Index<u64, u64>>,
 }
 
 impl<'a> Mapper<'a> for TransactionMapper {
   type Record = TransactionRecord;
-  type Indices = (&'a Trunks, &'a Branches);
+  type Indices = (IndexGuard<'a, u64, u64>, IndexGuard<'a, u64, u64>);
 
   fn new(counter: Arc<Counter>) -> Result<Self> {
     let records = RwLock::new(HashMap::new());
@@ -46,23 +45,19 @@ impl<'a> Mapper<'a> for TransactionMapper {
   }
 
   fn indices(&'a self) -> Self::Indices {
-    (&self.trunks, &self.branches)
+    (self.trunks.write().unwrap(), self.branches.write().unwrap())
   }
 
   fn store_indices(
-    (trunks, branches): Self::Indices,
+    &mut (ref mut trunks, ref mut branches): &mut Self::Indices,
     record: &TransactionRecord,
   ) {
-    let trunks = {
-      let mut trunks = trunks.write().unwrap();
-      store_index(&mut trunks, record.id_trunk())
-    };
-    store_ordered(&trunks, record.id());
-    let branches = {
-      let mut branches = branches.write().unwrap();
-      store_index(&mut branches, record.id_branch())
-    };
-    store_ordered(&branches, record.id());
+    if let Some(id_trunk) = record.id_trunk() {
+      store_index(trunks, id_trunk, record.id());
+    }
+    if let Some(id_branch) = record.id_branch() {
+      store_index(branches, id_branch, record.id());
+    }
   }
 
   fn next_counter(&self) -> u64 {
@@ -86,6 +81,7 @@ impl TransactionMapper {
     let found = TransactionRecord::find_by_hashes(conn, &missing)?;
     let mut records = self.records.write().unwrap();
     let mut hashes = self.hashes.write().unwrap();
+    let mut indices = self.indices();
     let mut output = input
       .into_iter()
       .map(|hash| {
@@ -106,7 +102,7 @@ impl TransactionMapper {
                 )
               });
             let (id_tx, record) =
-              Self::store(&mut records, &mut hashes, self.indices(), record);
+              Self::store(&mut records, &mut hashes, &mut indices, record);
             (id_tx, record.clone())
           })
       })
@@ -124,25 +120,39 @@ impl TransactionMapper {
     let branches = self.branches.read().unwrap();
     branches.get(&id).cloned()
   }
+
+  pub fn set_trunk(&self, record: &mut TransactionRecord, id_trunk: u64) {
+    match record.id_trunk() {
+      Some(_) => panic!("`id_trunk` is immutable"),
+      None => {
+        let mut trunks = self.trunks.write().unwrap();
+        store_index(&mut trunks, id_trunk, record.id());
+        record.set_id_trunk(Some(id_trunk));
+      }
+    }
+  }
+
+  pub fn set_branch(&self, record: &mut TransactionRecord, id_branch: u64) {
+    match record.id_branch() {
+      Some(_) => panic!("`id_branch` is immutable"),
+      None => {
+        let mut branches = self.branches.write().unwrap();
+        store_index(&mut branches, id_branch, record.id());
+        record.set_id_branch(Some(id_branch));
+      }
+    }
+  }
 }
 
-fn store_index<K, V>(
-  index: &mut HashMap<K, Arc<Mutex<Vec<V>>>>,
-  key: K,
-) -> Arc<Mutex<Vec<V>>>
+fn store_index<K, V>(index: &mut IndexGuard<K, V>, key: K, value: V)
 where
   K: Eq + Hash,
-{
-  index
-    .entry(key)
-    .or_insert_with(|| Arc::new(Mutex::new(Vec::new())))
-    .clone()
-}
-
-fn store_ordered<V>(vec: &Arc<Mutex<Vec<V>>>, value: V)
-where
   V: Ord,
 {
+  let vec = index
+    .entry(key)
+    .or_insert_with(|| Arc::new(Mutex::new(Vec::new())))
+    .clone();
   let mut vec = vec.lock().unwrap();
   if let Err(i) = vec.binary_search(&value) {
     vec.insert(i, value)
