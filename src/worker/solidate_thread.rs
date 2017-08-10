@@ -2,6 +2,7 @@ use super::Result;
 use event;
 use mapper::{Mapper, TransactionMapper};
 use mysql;
+use solid::Solidate;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use utils;
@@ -48,11 +49,13 @@ pub fn perform(
   let (timestamp, mut counter) = (utils::milliseconds_since_epoch()?, 0);
   while let Some((id, height)) = nodes.pop() {
     counter += 1;
-    if let Some(ids) = transaction_mapper.trunk_references(id) {
-      solidate_nodes(conn, transaction_mapper, ids, &mut nodes, height, 0b10)?;
+    if let Some(references) = transaction_mapper.trunk_references(id) {
+      Solidate::Trunk
+        .perform(conn, transaction_mapper, &mut nodes, references, height)?;
     }
-    if let Some(ids) = transaction_mapper.branch_references(id) {
-      solidate_nodes(conn, transaction_mapper, ids, &mut nodes, None, 0b01)?;
+    if let Some(references) = transaction_mapper.branch_references(id) {
+      Solidate::Branch
+        .perform(conn, transaction_mapper, &mut nodes, references, None)?;
     }
   }
   if counter > 1 {
@@ -61,33 +64,46 @@ pub fn perform(
   Ok(())
 }
 
-fn solidate_nodes(
-  conn: &mut mysql::Conn,
-  transaction_mapper: &TransactionMapper,
-  ids: Arc<Mutex<Vec<u64>>>,
-  nodes: &mut SolidateVec,
-  height: Option<i32>,
-  solidate: u8,
-) -> Result<()> {
-  for &id in &*ids.lock().unwrap() {
-    let record = transaction_mapper.fetch(conn, id)?;
-    let mut record = record.lock().unwrap();
-    let solid = record.solid();
-    if solid & solidate != 0b00 {
-      continue;
+trait PerformSolidate {
+  fn perform(
+    self,
+    conn: &mut mysql::Conn,
+    transaction_mapper: &TransactionMapper,
+    nodes: &mut SolidateVec,
+    references: Arc<Mutex<Vec<u64>>>,
+    height: Option<i32>,
+  ) -> Result<()>;
+}
+
+impl PerformSolidate for Solidate {
+  fn perform(
+    self,
+    conn: &mut mysql::Conn,
+    transaction_mapper: &TransactionMapper,
+    nodes: &mut SolidateVec,
+    references: Arc<Mutex<Vec<u64>>>,
+    height: Option<i32>,
+  ) -> Result<()> {
+    for &id in &*references.lock().unwrap() {
+      let record = transaction_mapper.fetch(conn, id)?;
+      let mut record = record.lock().unwrap();
+      let mut solid = record.solid();
+      if !solid.solidate(self) {
+        continue;
+      }
+      record.set_solid(solid);
+      if let Some(height) = height {
+        record.set_height(height + 1);
+      }
+      if solid.is_complete() {
+        let height = if record.height() > 0 {
+          Some(record.height())
+        } else {
+          None
+        };
+        nodes.push((record.id_tx(), height));
+      }
     }
-    record.set_solid(solid | solidate);
-    if let Some(height) = height {
-      record.set_height(height + 1);
-    }
-    if record.solid() == 0b11 {
-      let height = if record.height() > 0 {
-        Some(record.height())
-      } else {
-        None
-      };
-      nodes.push((record.id_tx(), height));
-    }
+    Ok(())
   }
-  Ok(())
 }

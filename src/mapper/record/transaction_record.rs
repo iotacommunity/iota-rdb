@@ -1,5 +1,6 @@
 use super::super::{Error, Record, Result};
 use mysql;
+use solid::Solid;
 
 #[derive(Clone)]
 pub struct TransactionRecord {
@@ -21,7 +22,7 @@ pub struct TransactionRecord {
   height: i32,
   is_mst: bool,
   mst_a: bool,
-  solid: u8,
+  solid: Solid,
 }
 
 const SELECT_QUERY: &str = r#"
@@ -131,7 +132,7 @@ impl Record for TransactionRecord {
       height: row.take_opt("height").unwrap_or_else(|| Ok(0))?,
       is_mst: row.take_opt("is_mst").unwrap_or_else(|| Ok(false))?,
       mst_a: row.take_opt("mst_a").unwrap_or_else(|| Ok(false))?,
-      solid: row.take_opt("solid").unwrap_or_else(|| Ok(0b00))?,
+      solid: Solid::from_db(row.take_opt("solid").unwrap_or_else(|| Ok(0))?),
     })
   }
 
@@ -152,7 +153,7 @@ impl Record for TransactionRecord {
       "height" => self.height,
       "is_mst" => self.is_mst,
       "mst_a" => self.mst_a,
-      "solid" => self.solid,
+      "solid" => self.solid.into_db(),
     }
   }
 
@@ -182,7 +183,7 @@ impl TransactionRecord {
   define_accessors!(height, set_height, i32);
   define_accessors!(is_mst, set_is_mst, bool);
   define_accessors!(mst_a, set_mst_a, bool);
-  define_accessors!(solid, set_solid, u8);
+  define_accessors!(solid, set_solid, Solid);
 
   pub fn placeholder(hash: String, id_tx: u64) -> Self {
     Self {
@@ -204,7 +205,7 @@ impl TransactionRecord {
       height: 0,
       is_mst: false,
       mst_a: false,
-      solid: 0b00,
+      solid: Solid::None,
     }
   }
 

@@ -18,6 +18,7 @@ mod worker;
 mod message;
 mod counter;
 mod mapper;
+mod solid;
 mod event;
 mod utils;
 

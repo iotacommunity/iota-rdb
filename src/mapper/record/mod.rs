@@ -9,7 +9,6 @@ pub use self::bundle_record::BundleRecord;
 pub use self::transaction_record::TransactionRecord;
 
 use super::{Error, Result};
-
 use mysql;
 
 pub trait Record: Sized {

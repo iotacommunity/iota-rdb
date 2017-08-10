@@ -4,6 +4,7 @@ use mapper::{AddressMapper, AddressRecord, BundleMapper, BundleRecord, Mapper,
              Record, TransactionMapper, TransactionRecord};
 use message::TransactionMessage;
 use mysql;
+use solid::{Solid, Solidate};
 use std::collections::VecDeque;
 use std::sync::{mpsc, Arc, MutexGuard};
 use std::thread;
@@ -135,14 +136,16 @@ pub fn perform(
       branch_tx.direct_approve();
     }
     let mut solid = message.solid();
-    if trunk_tx.solid() == 0b11 {
-      solid |= 0b10;
+    if trunk_tx.solid().is_complete() {
+      solid.solidate(Solidate::Trunk);
     }
-    if map_branch(trunk_tx, &branch_tx, TransactionRecord::solid) == 0b11 {
-      solid |= 0b01;
+    if map_branch(trunk_tx, &branch_tx, TransactionRecord::solid)
+      .is_complete()
+    {
+      solid.solidate(Solidate::Branch);
     }
     current_tx.set_solid(solid);
-    if solid != 0b11 && trunk_tx.solid() == 0b11 {
+    if !solid.is_complete() && trunk_tx.solid().is_complete() {
       current_tx.set_height(trunk_tx.height() + 1);
     } else {
       current_tx.set_height(0);
@@ -158,7 +161,7 @@ pub fn perform(
     transaction_mapper.set_branch(current_tx, id_branch);
     current_tx.set_id_address(id_address);
     current_tx.set_id_bundle(id_bundle);
-    if solid != 0b11 {
+    if !solid.is_complete() {
       event::unsolid_transaction(conn, timestamp)?;
     }
     event::new_transaction_received(conn, timestamp)?;
@@ -171,7 +174,7 @@ pub fn perform(
       }
       approve_data = Some(deque);
     }
-    if solid == 0b11 {
+    if solid.is_complete() {
       let vec = vec![(current_tx.id_tx(), Some(current_tx.height()))];
       solidate_data = Some(vec);
     }
@@ -216,7 +219,7 @@ fn unwrap_transactions<'a>(
 
 fn solidate_genesis(tx: &mut TransactionRecord, null_hash: &str) {
   if !tx.is_persisted() && tx.hash() == null_hash {
-    tx.set_solid(0b11);
+    tx.set_solid(Solid::Complete);
   }
 }
 

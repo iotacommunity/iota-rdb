@@ -1,4 +1,5 @@
 use super::Result;
+use solid::Solid;
 
 pub const TAG_LENGTH: usize = 27;
 
@@ -15,7 +16,7 @@ pub struct TransactionMessage {
   trunk_hash: String,
   branch_hash: String,
   is_milestone: bool,
-  solid: u8,
+  solid: Solid,
 }
 
 impl TransactionMessage {
@@ -37,9 +38,9 @@ impl TransactionMessage {
     let branch_hash = chunks[10].to_owned();
     let is_milestone = address_hash == milestone_address;
     let solid = if is_milestone && tag == milestone_start_index {
-      0b11
+      Solid::Complete
     } else {
-      0b00
+      Solid::None
     };
     Ok(Self {
       hash,
@@ -68,5 +69,5 @@ impl TransactionMessage {
   define_getter!(trunk_hash, &str);
   define_getter!(branch_hash, &str);
   define_getter!(is_milestone, bool);
-  define_getter!(solid, u8);
+  define_getter!(solid, Solid);
 }
