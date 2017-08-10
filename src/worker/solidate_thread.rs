@@ -3,14 +3,15 @@ use event;
 use mapper::{Mapper, TransactionMapper};
 use mysql;
 use solid::Solidate;
+use std::collections::VecDeque;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use utils;
 
-pub type SolidateVec = Vec<(u64, Option<i32>)>;
+pub type SolidateMessage = (u64, i32);
 
 pub struct SolidateThread<'a> {
-  pub solidate_rx: mpsc::Receiver<SolidateVec>,
+  pub solidate_rx: mpsc::Receiver<SolidateMessage>,
   pub mysql_uri: &'a str,
   pub transaction_mapper: Arc<TransactionMapper>,
 }
@@ -27,10 +28,10 @@ impl<'a> SolidateThread<'a> {
     thread::spawn(move || {
       let transaction_mapper = &*transaction_mapper;
       loop {
-        let vec = solidate_rx.recv().expect("Thread communication failure");
-        match perform(&mut conn, transaction_mapper, vec.clone()) {
+        let message = solidate_rx.recv().expect("Thread communication failure");
+        match perform(&mut conn, transaction_mapper, &message) {
           Ok(()) => {
-            info!("{:?}", vec);
+            info!("{:?}", message);
           }
           Err(err) => {
             error!("{}", err);
@@ -44,10 +45,12 @@ impl<'a> SolidateThread<'a> {
 pub fn perform(
   conn: &mut mysql::Conn,
   transaction_mapper: &TransactionMapper,
-  mut nodes: SolidateVec,
+  &(id, height): &SolidateMessage,
 ) -> Result<()> {
   let (timestamp, mut counter) = (utils::milliseconds_since_epoch()?, 0);
-  while let Some((id, height)) = nodes.pop() {
+  let mut nodes = VecDeque::new();
+  nodes.push_front((id, Some(height)));
+  while let Some((id, height)) = nodes.pop_back() {
     counter += 1;
     if let Some(references) = transaction_mapper.trunk_references(id) {
       Solidate::Trunk
@@ -69,7 +72,7 @@ trait PerformSolidate {
     self,
     conn: &mut mysql::Conn,
     transaction_mapper: &TransactionMapper,
-    nodes: &mut SolidateVec,
+    nodes: &mut VecDeque<(u64, Option<i32>)>,
     references: Arc<Mutex<Vec<u64>>>,
     height: Option<i32>,
   ) -> Result<()>;
@@ -80,7 +83,7 @@ impl PerformSolidate for Solidate {
     self,
     conn: &mut mysql::Conn,
     transaction_mapper: &TransactionMapper,
-    nodes: &mut SolidateVec,
+    nodes: &mut VecDeque<(u64, Option<i32>)>,
     references: Arc<Mutex<Vec<u64>>>,
     height: Option<i32>,
   ) -> Result<()> {
@@ -101,7 +104,7 @@ impl PerformSolidate for Solidate {
         } else {
           None
         };
-        nodes.push((record.id_tx(), height));
+        nodes.push_front((record.id_tx(), height));
       }
     }
     Ok(())

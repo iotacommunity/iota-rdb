@@ -30,8 +30,8 @@ use counter::Counter;
 use mapper::{AddressMapper, BundleMapper, Mapper, TransactionMapper};
 use std::process::exit;
 use std::sync::{mpsc, Arc};
-use worker::{ApproveThread, InsertThread, SolidateThread, UpdateThread,
-             ZmqLoop};
+use worker::{ApproveThread, CalculateThread, InsertThread, SolidateThread,
+             UpdateThread, ZmqLoop};
 
 fn main() {
   let matches = app::build().get_matches();
@@ -55,6 +55,7 @@ fn main() {
   let (insert_tx, insert_rx) = mpsc::channel();
   let (approve_tx, approve_rx) = mpsc::channel();
   let (solidate_tx, solidate_rx) = mpsc::channel();
+  let (calculate_tx, calculate_rx) = mpsc::channel();
   let counter = Arc::new(Counter::new(mysql_uri).expect("Counter failure"));
   let transaction_mapper = Arc::new(
     TransactionMapper::new(counter.clone())
@@ -79,6 +80,7 @@ fn main() {
     insert_rx,
     approve_tx,
     solidate_tx,
+    calculate_tx,
     mysql_uri,
     transaction_mapper: transaction_mapper.clone(),
     address_mapper: address_mapper.clone(),
@@ -104,11 +106,17 @@ fn main() {
     mysql_uri,
     transaction_mapper: transaction_mapper.clone(),
   };
+  let calculate_thread = CalculateThread {
+    calculate_rx,
+    mysql_uri,
+    transaction_mapper: transaction_mapper.clone(),
+  };
   let zmq_loop = ZmqLoop { socket, insert_tx };
 
   insert_thread.spawn();
   update_thread.spawn();
   approve_thread.spawn();
   solidate_thread.spawn();
+  calculate_thread.spawn();
   zmq_loop.run();
 }

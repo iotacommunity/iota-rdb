@@ -5,18 +5,18 @@ use mapper::{AddressMapper, AddressRecord, BundleMapper, BundleRecord, Mapper,
 use message::TransactionMessage;
 use mysql;
 use solid::{Solid, Solidate};
-use std::collections::VecDeque;
 use std::sync::{mpsc, Arc, MutexGuard};
 use std::thread;
 use utils;
-use worker::{ApproveVec, SolidateVec};
+use worker::{ApproveMessage, CalculateMessage, SolidateMessage};
 
 const HASH_SIZE: usize = 81;
 
 pub struct InsertThread<'a> {
   pub insert_rx: mpsc::Receiver<String>,
-  pub approve_tx: mpsc::Sender<ApproveVec>,
-  pub solidate_tx: mpsc::Sender<SolidateVec>,
+  pub approve_tx: mpsc::Sender<ApproveMessage>,
+  pub solidate_tx: mpsc::Sender<SolidateMessage>,
+  pub calculate_tx: mpsc::Sender<CalculateMessage>,
   pub mysql_uri: &'a str,
   pub transaction_mapper: Arc<TransactionMapper>,
   pub address_mapper: Arc<AddressMapper>,
@@ -31,6 +31,7 @@ impl<'a> InsertThread<'a> {
       insert_rx,
       approve_tx,
       solidate_tx,
+      calculate_tx,
       mysql_uri,
       transaction_mapper,
       address_mapper,
@@ -62,7 +63,7 @@ impl<'a> InsertThread<'a> {
             &message,
             &null_hash,
           ) {
-            Ok((approve_data, solidate_data)) => {
+            Ok((approve_data, solidate_data, calculate_data)) => {
               info!("{}", message.hash());
               if let Some(approve_data) = approve_data {
                 approve_tx
@@ -72,6 +73,11 @@ impl<'a> InsertThread<'a> {
               if let Some(solidate_data) = solidate_data {
                 solidate_tx
                   .send(solidate_data)
+                  .expect("Thread communication failure");
+              }
+              if let Some(calculate_data) = calculate_data {
+                calculate_tx
+                  .send(calculate_data)
                   .expect("Thread communication failure");
               }
             }
@@ -95,10 +101,17 @@ pub fn perform(
   bundle_mapper: &BundleMapper,
   message: &TransactionMessage,
   null_hash: &str,
-) -> Result<(Option<ApproveVec>, Option<SolidateVec>)> {
-  let (mut approve_data, mut solidate_data) = (None, None);
+) -> Result<
+  (
+    Option<ApproveMessage>,
+    Option<SolidateMessage>,
+    Option<CalculateMessage>,
+  ),
+> {
+  let (mut approve_data, mut solidate_data, mut calculate_data) =
+    (None, None, None);
   if !is_valid(message, null_hash) {
-    return Ok((approve_data, solidate_data));
+    return Ok((approve_data, solidate_data, calculate_data));
   }
   let hashes =
     vec![message.hash(), message.trunk_hash(), message.branch_hash()];
@@ -107,25 +120,6 @@ pub fn perform(
   let txs = unwrap_transactions(&mut txs, message);
   if let Some((mut current_tx, mut trunk_tx, mut branch_tx)) = txs {
     let timestamp = utils::milliseconds_since_epoch()?;
-    let id_address = address_mapper.fetch_or_insert(
-      conn,
-      message.address_hash(),
-      |id_address| {
-        AddressRecord::new(id_address, message.address_hash().to_owned())
-      },
-    )?;
-    let id_bundle = bundle_mapper.fetch_or_insert(
-      conn,
-      message.bundle_hash(),
-      |id_bundle| {
-        Ok(BundleRecord::new(
-          id_bundle,
-          message.bundle_hash().to_owned(),
-          message.last_index(),
-          timestamp,
-        ))
-      },
-    )?;
     let id_branch = map_branch(trunk_tx, &branch_tx, TransactionRecord::id_tx);
     solidate_genesis(trunk_tx, null_hash);
     trunk_tx.direct_approve();
@@ -133,21 +127,12 @@ pub fn perform(
       solidate_genesis(branch_tx, null_hash);
       branch_tx.direct_approve();
     }
-    let mut solid = message.solid();
-    if trunk_tx.solid().is_complete() {
-      solid.solidate(Solidate::Trunk);
-    }
-    if map_branch(trunk_tx, &branch_tx, TransactionRecord::solid)
-      .is_complete()
-    {
-      solid.solidate(Solidate::Branch);
-    }
-    current_tx.set_solid(solid);
-    if !solid.is_complete() && trunk_tx.solid().is_complete() {
-      current_tx.set_height(trunk_tx.height() + 1);
-    } else {
-      current_tx.set_height(0);
-    }
+    transaction_mapper.set_trunk(current_tx, trunk_tx.id_tx());
+    transaction_mapper.set_branch(current_tx, id_branch);
+    set_id_address(conn, address_mapper, message, current_tx)?;
+    set_id_bundle(conn, bundle_mapper, message, current_tx, timestamp)?;
+    set_solid(message, current_tx, trunk_tx, &branch_tx);
+    set_height(message, current_tx, trunk_tx);
     current_tx.set_tag(message.tag().to_owned());
     current_tx.set_value(message.value());
     current_tx.set_timestamp(message.timestamp());
@@ -155,30 +140,13 @@ pub fn perform(
     current_tx.set_last_idx(message.last_index());
     current_tx.set_is_mst(message.is_milestone());
     current_tx.set_mst_a(message.is_milestone());
-    transaction_mapper.set_trunk(current_tx, trunk_tx.id_tx());
-    transaction_mapper.set_branch(current_tx, id_branch);
-    current_tx.set_id_address(id_address);
-    current_tx.set_id_bundle(id_bundle);
-    if !solid.is_complete() {
-      event::unsolid_transaction(conn, timestamp)?;
-    }
-    event::new_transaction_received(conn, timestamp)?;
-    if message.is_milestone() {
-      event::milestone_received(conn, timestamp)?;
-      let mut deque = VecDeque::new();
-      deque.push_front(trunk_tx.id_tx());
-      if let Some(ref branch_tx) = branch_tx {
-        deque.push_front(branch_tx.id_tx());
-      }
-      approve_data = Some(deque);
-    }
-    if solid.is_complete() {
-      let vec = vec![(current_tx.id_tx(), Some(current_tx.height()))];
-      solidate_data = Some(vec);
-    }
+    insert_events(conn, message, current_tx, timestamp)?;
+    set_approve_data(&mut approve_data, message, trunk_tx, &branch_tx);
+    set_solidate_data(&mut solidate_data, current_tx);
+    set_calculate_data(&mut calculate_data, current_tx);
     current_tx.insert(conn)?;
   }
-  Ok((approve_data, solidate_data))
+  Ok((approve_data, solidate_data, calculate_data))
 }
 
 fn is_valid(message: &TransactionMessage, null_hash: &str) -> bool {
@@ -222,7 +190,7 @@ fn solidate_genesis(tx: &mut TransactionRecord, null_hash: &str) {
 }
 
 fn map_branch<T, U>(
-  trunk_tx: &mut TransactionRecord,
+  trunk_tx: &TransactionRecord,
   branch_tx: &Option<&mut TransactionRecord>,
   f: T,
 ) -> U
@@ -234,4 +202,114 @@ where
   } else {
     f(trunk_tx)
   }
+}
+
+fn set_id_address(
+  conn: &mut mysql::Conn,
+  address_mapper: &AddressMapper,
+  message: &TransactionMessage,
+  current_tx: &mut TransactionRecord,
+) -> Result<()> {
+  current_tx.set_id_address(address_mapper.fetch_or_insert(
+    conn,
+    message.address_hash(),
+    |id_address| {
+      AddressRecord::new(id_address, message.address_hash().to_owned())
+    },
+  )?);
+  Ok(())
+}
+
+fn set_id_bundle(
+  conn: &mut mysql::Conn,
+  bundle_mapper: &BundleMapper,
+  message: &TransactionMessage,
+  current_tx: &mut TransactionRecord,
+  timestamp: f64,
+) -> Result<()> {
+  current_tx.set_id_bundle(bundle_mapper.fetch_or_insert(
+    conn,
+    message.bundle_hash(),
+    |id_bundle| {
+      Ok(BundleRecord::new(
+        id_bundle,
+        message.bundle_hash().to_owned(),
+        message.last_index(),
+        timestamp,
+      ))
+    },
+  )?);
+  Ok(())
+}
+
+fn set_solid(
+  message: &TransactionMessage,
+  current_tx: &mut TransactionRecord,
+  trunk_tx: &TransactionRecord,
+  branch_tx: &Option<&mut TransactionRecord>,
+) {
+  let mut solid = message.solid();
+  if trunk_tx.solid().is_complete() {
+    solid.solidate(Solidate::Trunk);
+  }
+  if map_branch(trunk_tx, branch_tx, TransactionRecord::solid).is_complete() {
+    solid.solidate(Solidate::Branch);
+  }
+  current_tx.set_solid(solid);
+}
+
+fn set_height(
+  message: &TransactionMessage,
+  current_tx: &mut TransactionRecord,
+  trunk_tx: &TransactionRecord,
+) {
+  if !message.solid().is_complete() && trunk_tx.solid().is_complete() {
+    current_tx.set_height(trunk_tx.height() + 1);
+  } else {
+    current_tx.set_height(0);
+  }
+}
+
+fn insert_events(
+  conn: &mut mysql::Conn,
+  message: &TransactionMessage,
+  current_tx: &mut TransactionRecord,
+  timestamp: f64,
+) -> Result<()> {
+  event::new_transaction_received(conn, timestamp)?;
+  if !current_tx.solid().is_complete() {
+    event::unsolid_transaction(conn, timestamp)?;
+  }
+  if message.is_milestone() {
+    event::milestone_received(conn, timestamp)?;
+  }
+  Ok(())
+}
+
+fn set_approve_data(
+  approve_data: &mut Option<ApproveMessage>,
+  message: &TransactionMessage,
+  trunk_tx: &TransactionRecord,
+  branch_tx: &Option<&mut TransactionRecord>,
+) {
+  if message.is_milestone() {
+    *approve_data =
+      Some((trunk_tx.id_tx(), branch_tx.as_ref().map(|tx| tx.id_tx())));
+  }
+}
+
+fn set_solidate_data(
+  solidate_data: &mut Option<SolidateMessage>,
+  current_tx: &TransactionRecord,
+) {
+  if current_tx.solid().is_complete() {
+    *solidate_data = Some((current_tx.id_tx(), current_tx.height()));
+  }
+}
+
+fn set_calculate_data(
+  calculate_data: &mut Option<CalculateMessage>,
+  current_tx: &TransactionRecord,
+) {
+  *calculate_data = Some(current_tx.id_tx());
 }
