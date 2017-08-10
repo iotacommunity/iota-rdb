@@ -11,7 +11,7 @@ pub struct Args<'a> {
   pub update_interval: u64,
   pub milestone_address: &'a str,
   pub milestone_start_index: String,
-  pub verbose: bool,
+  pub log_config: &'a str,
 }
 
 impl<'a> Args<'a> {
@@ -34,7 +34,7 @@ impl<'a> Args<'a> {
         .map_err(Error::MilestoneStartIndexParseInt)?,
       TAG_LENGTH,
     ).ok_or(Error::MilestoneStartIndexToTrits)?;
-    let verbose = matches.is_present("VERBOSE");
+    let log_config = matches.value_of("log_config").ok_or(Error::ArgNotFound)?;
 
     Ok(Self {
       zmq_uri,
@@ -42,7 +42,7 @@ impl<'a> Args<'a> {
       update_interval,
       milestone_address,
       milestone_start_index,
-      verbose,
+      log_config,
     })
   }
 }

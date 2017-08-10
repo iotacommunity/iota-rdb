@@ -2,6 +2,9 @@
 #![cfg_attr(feature = "clippy", plugin(clippy))]
 
 #[macro_use]
+extern crate log;
+extern crate log4rs;
+#[macro_use]
 extern crate clap;
 extern crate zmq;
 #[macro_use]
@@ -42,8 +45,12 @@ fn main() {
     update_interval,
     milestone_address,
     milestone_start_index,
-    verbose,
+    log_config,
   } = args;
+  log4rs::init_file(log_config, Default::default()).unwrap_or_else(|err| {
+    eprintln!("Error while processing logger configuration file: {}", err);
+    exit(1);
+  });
 
   let (insert_tx, insert_rx) = mpsc::channel();
   let (approve_tx, approve_rx) = mpsc::channel();
@@ -64,11 +71,9 @@ fn main() {
   socket.connect(zmq_uri).expect("ZMQ socket connect failure");
   socket.set_subscribe(b"tx ").expect("ZMQ subscribe failure");
 
-  if verbose {
-    println!("Milestone address: {}", milestone_address);
-    println!("Milestone start index string: {}", milestone_start_index);
-    println!("Highest ids: {}", counter);
-  }
+  info!("Milestone address: {}", milestone_address);
+  info!("Milestone start index string: {}", milestone_start_index);
+  info!("Highest ids: {}", counter);
 
   let insert_thread = InsertThread {
     insert_rx,
@@ -101,9 +106,9 @@ fn main() {
   };
   let zmq_loop = ZmqLoop { socket, insert_tx };
 
-  insert_thread.spawn(verbose);
-  update_thread.spawn(verbose);
-  approve_thread.spawn(verbose);
-  solidate_thread.spawn(verbose);
-  zmq_loop.run(verbose);
+  insert_thread.spawn();
+  update_thread.spawn();
+  approve_thread.spawn();
+  solidate_thread.spawn();
+  zmq_loop.run();
 }

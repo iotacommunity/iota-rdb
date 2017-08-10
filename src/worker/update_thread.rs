@@ -14,7 +14,7 @@ pub struct UpdateThread<'a> {
 }
 
 impl<'a> UpdateThread<'a> {
-  pub fn spawn(self, verbose: bool) {
+  pub fn spawn(self) {
     let Self {
       mysql_uri,
       update_interval,
@@ -37,11 +37,11 @@ impl<'a> UpdateThread<'a> {
           address_mapper,
           bundle_mapper,
         ) {
-          Ok(()) => if verbose {
-            println!("[upd]");
-          },
+          Ok(()) => {
+            info!("Ok");
+          }
           Err(err) => {
-            eprintln!("[upd] Update error: {}", err);
+            error!("{}", err);
           }
         }
       }

@@ -23,7 +23,7 @@ const SELECT_QUERY: &str = r#"
 "#;
 
 impl Record for BundleRecord {
-  define_record!();
+  impl_record!();
 
   const SELECT_QUERY: &'static str = SELECT_QUERY;
   const SELECT_WHERE_ID: &'static str = r"WHERE id_bundle = ?";
@@ -85,11 +85,11 @@ impl Record for BundleRecord {
 }
 
 impl BundleRecord {
-  define_getter!(bundle, &str);
-  define_getter!(id_bundle, u64);
-  define_accessors!(created, set_created, f64);
-  define_accessors!(size, set_size, i32);
-  define_accessors!(confirmed, set_confirmed, f64);
+  impl_getter!(bundle, &str);
+  impl_getter!(id_bundle, u64);
+  impl_accessors!(created, set_created, f64);
+  impl_accessors!(size, set_size, i32);
+  impl_accessors!(confirmed, set_confirmed, f64);
 
   pub fn new(id_bundle: u64, bundle: String, size: i32, created: f64) -> Self {
     Self {

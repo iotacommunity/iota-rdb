@@ -16,7 +16,7 @@ pub struct SolidateThread<'a> {
 }
 
 impl<'a> SolidateThread<'a> {
-  pub fn spawn(self, verbose: bool) {
+  pub fn spawn(self) {
     let Self {
       solidate_rx,
       mysql_uri,
@@ -29,11 +29,11 @@ impl<'a> SolidateThread<'a> {
       loop {
         let vec = solidate_rx.recv().expect("Thread communication failure");
         match perform(&mut conn, transaction_mapper, vec.clone()) {
-          Ok(()) => if verbose {
-            println!("[sol] {:?}", vec);
-          },
+          Ok(()) => {
+            info!("{:?}", vec);
+          }
           Err(err) => {
-            eprintln!("[sol] Error: {}", err);
+            error!("{}", err);
           }
         }
       }

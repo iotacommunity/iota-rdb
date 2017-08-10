@@ -7,23 +7,21 @@ pub struct ZmqLoop {
 }
 
 impl ZmqLoop {
-  pub fn run(self, verbose: bool) -> ! {
+  pub fn run(self) -> ! {
     loop {
       match self.socket.recv_string(0) {
         Ok(Ok(string)) => {
-          if verbose {
-            println!("[zmq] {}", string);
-          }
+          info!("{}", string);
           self
             .insert_tx
             .send(string)
             .expect("Thread communication failure");
         }
         Ok(Err(err)) => {
-          eprintln!("[zmq] Unexpected byte sequence: {:?}", err);
+          error!("Unexpected byte sequence: {:?}", err);
         }
         Err(err) => {
-          eprintln!("{}", err);
+          error!("{}", err);
         }
       }
     }

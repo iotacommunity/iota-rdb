@@ -5,6 +5,7 @@ const DEFAULT_MILESTONE_ADDRESS: &str =
   "KPWCHICGJZXKE9GSUDXZYUAPLHAKAHYHDXNPHENTE\
    RYMMBQOPSQIDENXKLKCEYCPVTZQLEEJVYJZV9BWU";
 const DEFAULT_MILESTONE_START_INDEX: &str = "62000";
+const DEFAULT_LOG_CONFIG: &str = "log4rs.yaml";
 
 pub fn build<'a, 'b>() -> App<'a, 'b> {
   app_from_crate!()
@@ -54,9 +55,12 @@ pub fn build<'a, 'b>() -> App<'a, 'b> {
         .help("Milestone start index"),
     )
     .arg(
-      Arg::with_name("VERBOSE")
-        .short("v")
-        .long("verbose")
-        .help("Prints flowing messages"),
+      Arg::with_name("log_config")
+        .short("C")
+        .long("log-config")
+        .takes_value(true)
+        .value_name("FILE")
+        .default_value(DEFAULT_LOG_CONFIG)
+        .help("Path to log4rs configuration file"),
     )
 }

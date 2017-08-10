@@ -58,16 +58,16 @@ impl TransactionMessage {
     })
   }
 
-  define_getter!(hash, &str);
-  define_getter!(address_hash, &str);
-  define_getter!(value, i64);
-  define_getter!(tag, &str);
-  define_getter!(timestamp, f64);
-  define_getter!(current_index, i32);
-  define_getter!(last_index, i32);
-  define_getter!(bundle_hash, &str);
-  define_getter!(trunk_hash, &str);
-  define_getter!(branch_hash, &str);
-  define_getter!(is_milestone, bool);
-  define_getter!(solid, Solid);
+  impl_getter!(hash, &str);
+  impl_getter!(address_hash, &str);
+  impl_getter!(value, i64);
+  impl_getter!(tag, &str);
+  impl_getter!(timestamp, f64);
+  impl_getter!(current_index, i32);
+  impl_getter!(last_index, i32);
+  impl_getter!(bundle_hash, &str);
+  impl_getter!(trunk_hash, &str);
+  impl_getter!(branch_hash, &str);
+  impl_getter!(is_milestone, bool);
+  impl_getter!(solid, Solid);
 }

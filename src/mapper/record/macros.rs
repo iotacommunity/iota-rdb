@@ -1,9 +1,9 @@
-macro_rules! define_setter {
+macro_rules! impl_setter {
   ($name:ident, $set_name:ident, $type:ty, in $restricted:path) => {
     #[cfg_attr(feature = "clippy", allow(float_cmp))]
     #[allow(dead_code)]
     pub(in $restricted) fn $set_name(&mut self, value: $type) {
-      define_setter!(body, $name, self, value);
+      impl_setter!(body, $name, self, value);
     }
   };
 
@@ -11,7 +11,7 @@ macro_rules! define_setter {
     #[cfg_attr(feature = "clippy", allow(float_cmp))]
     #[allow(dead_code)]
     pub fn $set_name(&mut self, value: $type) {
-      define_setter!(body, $name, self, value);
+      impl_setter!(body, $name, self, value);
     }
   };
 
@@ -23,14 +23,14 @@ macro_rules! define_setter {
   }
 }
 
-macro_rules! define_accessors {
+macro_rules! impl_accessors {
   ($name:ident, $set_name:ident, $type:ty) => {
-    define_getter!($name, $type);
-    define_setter!($name, $set_name, $type);
+    impl_getter!($name, $type);
+    impl_setter!($name, $set_name, $type);
   };
 }
 
-macro_rules! define_record {
+macro_rules! impl_record {
   () => {
     fn is_persisted(&self) -> bool {
       self.persisted

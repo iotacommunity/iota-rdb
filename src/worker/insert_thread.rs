@@ -26,7 +26,7 @@ pub struct InsertThread<'a> {
 }
 
 impl<'a> InsertThread<'a> {
-  pub fn spawn(self, verbose: bool) {
+  pub fn spawn(self) {
     let Self {
       insert_rx,
       approve_tx,
@@ -63,9 +63,7 @@ impl<'a> InsertThread<'a> {
             &null_hash,
           ) {
             Ok((approve_data, solidate_data)) => {
-              if verbose {
-                println!("[ins] {}", message.hash());
-              }
+              info!("{}", message.hash());
               if let Some(approve_data) = approve_data {
                 approve_tx
                   .send(approve_data)
@@ -78,11 +76,11 @@ impl<'a> InsertThread<'a> {
               }
             }
             Err(err) => {
-              eprintln!("[ins] Processing error: {}", err);
+              error!("Processing failure: {}", err);
             }
           },
           Err(err) => {
-            eprintln!("[ins] Parsing error: {}", err);
+            error!("Parsing failure: {}", err);
           }
         }
       }

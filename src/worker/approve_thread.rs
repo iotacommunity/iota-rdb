@@ -17,7 +17,7 @@ pub struct ApproveThread<'a> {
 }
 
 impl<'a> ApproveThread<'a> {
-  pub fn spawn(self, verbose: bool) {
+  pub fn spawn(self) {
     let Self {
       approve_rx,
       mysql_uri,
@@ -37,11 +37,11 @@ impl<'a> ApproveThread<'a> {
           bundle_mapper,
           vec.clone(),
         ) {
-          Ok(()) => if verbose {
-            println!("[apv] {:?}", vec);
-          },
+          Ok(()) => {
+            info!("{:?}", vec);
+          }
           Err(err) => {
-            eprintln!("[apv] Error: {}", err);
+            error!("{}", err);
           }
         }
       }

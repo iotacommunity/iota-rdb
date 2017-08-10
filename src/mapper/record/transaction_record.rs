@@ -50,7 +50,7 @@ const WHERE_HASH_TWO: &str = r"WHERE hash IN (?, ?)";
 const WHERE_HASH_THREE: &str = r"WHERE hash IN (?, ?, ?)";
 
 impl Record for TransactionRecord {
-  define_record!();
+  impl_record!();
 
   const SELECT_QUERY: &'static str = SELECT_QUERY;
   const SELECT_WHERE_ID: &'static str = r"WHERE id_tx = ?";
@@ -165,23 +165,23 @@ impl Record for TransactionRecord {
 }
 
 impl TransactionRecord {
-  define_getter!(id_tx, u64);
-  define_getter!(id_trunk, Option<u64>);
-  define_getter!(id_branch, Option<u64>);
-  define_setter!(id_trunk, set_id_trunk, Option<u64>, in super::super);
-  define_setter!(id_branch, set_id_branch, Option<u64>, in super::super);
-  define_accessors!(id_address, set_id_address, u64);
-  define_accessors!(id_bundle, set_id_bundle, u64);
-  define_getter!(tag, &str);
-  define_setter!(tag, set_tag, String);
-  define_accessors!(value, set_value, i64);
-  define_accessors!(timestamp, set_timestamp, f64);
-  define_accessors!(current_idx, set_current_idx, i32);
-  define_accessors!(last_idx, set_last_idx, i32);
-  define_accessors!(height, set_height, i32);
-  define_accessors!(is_mst, set_is_mst, bool);
-  define_accessors!(mst_a, set_mst_a, bool);
-  define_accessors!(solid, set_solid, Solid);
+  impl_getter!(id_tx, u64);
+  impl_getter!(id_trunk, Option<u64>);
+  impl_getter!(id_branch, Option<u64>);
+  impl_setter!(id_trunk, set_id_trunk, Option<u64>, in super::super);
+  impl_setter!(id_branch, set_id_branch, Option<u64>, in super::super);
+  impl_accessors!(id_address, set_id_address, u64);
+  impl_accessors!(id_bundle, set_id_bundle, u64);
+  impl_getter!(tag, &str);
+  impl_setter!(tag, set_tag, String);
+  impl_accessors!(value, set_value, i64);
+  impl_accessors!(timestamp, set_timestamp, f64);
+  impl_accessors!(current_idx, set_current_idx, i32);
+  impl_accessors!(last_idx, set_last_idx, i32);
+  impl_accessors!(height, set_height, i32);
+  impl_accessors!(is_mst, set_is_mst, bool);
+  impl_accessors!(mst_a, set_mst_a, bool);
+  impl_accessors!(solid, set_solid, Solid);
 
   pub fn placeholder(hash: String, id_tx: u64) -> Self {
     Self {

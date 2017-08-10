@@ -8,6 +8,8 @@ license = "MIT"
 clap = "2"
 zmq = "0.8"
 mysql = "11"
+log = "0.3"
+log4rs = "0.7.0"
 clippy = {version = "*", optional = true}
 
 [dependencies.iota-trytes]

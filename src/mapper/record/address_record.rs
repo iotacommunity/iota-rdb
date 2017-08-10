@@ -22,7 +22,7 @@ const SELECT_QUERY: &str = r#"
 "#;
 
 impl Record for AddressRecord {
-  define_record!();
+  impl_record!();
 
   const SELECT_QUERY: &'static str = SELECT_QUERY;
   const SELECT_WHERE_ID: &'static str = r"WHERE id_address = ?";
@@ -76,10 +76,10 @@ impl Record for AddressRecord {
 }
 
 impl AddressRecord {
-  define_getter!(address, &str);
-  define_getter!(id_address, u64);
-  define_getter!(checksum, &str);
-  define_setter!(checksum, set_checksum, String);
+  impl_getter!(address, &str);
+  impl_getter!(id_address, u64);
+  impl_getter!(checksum, &str);
+  impl_setter!(checksum, set_checksum, String);
 
   pub fn new(id_address: u64, address: String) -> Result<Self> {
     let checksum = calculate_checksum(&address)?;
