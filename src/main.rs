@@ -1,6 +1,9 @@
-#![cfg_attr(feature="clippy", feature(plugin))]
-#![cfg_attr(feature="clippy", plugin(clippy))]
+#![cfg_attr(feature = "clippy", feature(plugin))]
+#![cfg_attr(feature = "clippy", plugin(clippy))]
 
+#[macro_use]
+extern crate log;
+extern crate log4rs;
 #[macro_use]
 extern crate clap;
 extern crate zmq;
@@ -15,16 +18,18 @@ mod macros;
 mod app;
 mod args;
 mod worker;
-mod transaction;
-mod counters;
-mod query;
+mod message;
+mod mapper;
+mod solid;
+mod event;
 mod utils;
 
 use args::Args;
-use counters::Counters;
+use mapper::{AddressMapper, BundleMapper, Mapper, TransactionMapper};
 use std::process::exit;
-use std::sync::mpsc;
-use worker::{ApprovePool, SolidatePool, WritePool, ZmqReader};
+use std::sync::{mpsc, Arc};
+use worker::{ApproveThread, CalculateThread, InsertThread, SolidateThread,
+             UpdateThread, ZmqLoop};
 
 fn main() {
   let matches = app::build().get_matches();
@@ -32,50 +37,85 @@ fn main() {
     eprintln!("Invalid arguments: {}", err);
     exit(1);
   });
+  let Args {
+    zmq_uri,
+    mysql_uri,
+    update_interval,
+    milestone_address,
+    milestone_start_index,
+    log_config,
+  } = args;
+  log4rs::init_file(log_config, Default::default()).unwrap_or_else(|err| {
+    eprintln!("Error while processing logger configuration file: {}", err);
+    exit(1);
+  });
 
-  if args.verbose() {
-    println!("Milestone address: {}", args.milestone_address());
-    println!(
-      "Milestone start index string: {}",
-      args.milestone_start_index()
-    );
-  }
-
-  let counters =
-    Counters::new(args.mysql_uri()).expect("MySQL counters failure");
-  let ctx = zmq::Context::new();
-  let socket = ctx.socket(zmq::SUB).expect("ZMQ socket create failure");
-  let (write_tx, write_rx) = mpsc::channel();
+  let (insert_tx, insert_rx) = mpsc::channel();
   let (approve_tx, approve_rx) = mpsc::channel();
   let (solidate_tx, solidate_rx) = mpsc::channel();
-
-  if args.verbose() {
-    println!("Highest ids: {}", counters);
-  }
-
-  socket
-    .connect(args.zmq_uri())
-    .expect("ZMQ socket connect failure");
+  let (calculate_tx, calculate_rx) = mpsc::channel();
+  let ctx = zmq::Context::new();
+  let socket = ctx.socket(zmq::SUB).expect("ZMQ socket create failure");
+  socket.connect(zmq_uri).expect("ZMQ socket connect failure");
   socket.set_subscribe(b"tx ").expect("ZMQ subscribe failure");
-  WritePool {
-    write_rx,
+
+  let mut conn = mysql::Conn::new(mysql_uri).expect("MySQL connection failure");
+  let transaction_mapper = Arc::new(
+    TransactionMapper::new(&mut conn).expect("Transaction mapper failure"),
+  );
+  let address_mapper = Arc::new(
+    AddressMapper::new(&mut conn).expect("Address mapper failure"),
+  );
+  let bundle_mapper =
+    Arc::new(BundleMapper::new(&mut conn).expect("Bundle mapper failure"));
+
+  info!("Milestone address: {}", milestone_address);
+  info!("Milestone start index string: {}", milestone_start_index);
+  info!("Initial `id_tx`: {}", transaction_mapper.current_id());
+  info!("Initial `id_address`: {}", address_mapper.current_id());
+  info!("Initial `id_bundle`: {}", bundle_mapper.current_id());
+
+  let insert_thread = InsertThread {
+    insert_rx,
     approve_tx,
     solidate_tx,
-    mysql_uri: args.mysql_uri(),
-    counters,
-    milestone_address: args.milestone_address(),
-    milestone_start_index: args.milestone_start_index(),
-  }.run(args.verbose());
-  ApprovePool {
+    calculate_tx,
+    mysql_uri,
+    transaction_mapper: transaction_mapper.clone(),
+    address_mapper: address_mapper.clone(),
+    bundle_mapper: bundle_mapper.clone(),
+    milestone_address,
+    milestone_start_index,
+  };
+  let update_thread = UpdateThread {
+    mysql_uri,
+    update_interval,
+    transaction_mapper: transaction_mapper.clone(),
+    address_mapper: address_mapper.clone(),
+    bundle_mapper: bundle_mapper.clone(),
+  };
+  let approve_thread = ApproveThread {
     approve_rx,
-    mysql_uri: args.mysql_uri(),
-  }.run(args.approve_threads_count(), args.verbose());
-  SolidatePool {
+    mysql_uri,
+    transaction_mapper: transaction_mapper.clone(),
+    bundle_mapper: bundle_mapper.clone(),
+  };
+  let solidate_thread = SolidateThread {
     solidate_rx,
-    mysql_uri: args.mysql_uri(),
-  }.run(args.solidate_threads_count(), args.verbose());
-  ZmqReader {
-    socket: &socket,
-    tx: &write_tx,
-  }.run(args.verbose());
+    mysql_uri,
+    transaction_mapper: transaction_mapper.clone(),
+  };
+  let calculate_thread = CalculateThread {
+    calculate_rx,
+    mysql_uri,
+    transaction_mapper: transaction_mapper.clone(),
+  };
+  let zmq_loop = ZmqLoop { socket, insert_tx };
+
+  insert_thread.spawn();
+  update_thread.spawn();
+  approve_thread.spawn();
+  solidate_thread.spawn();
+  calculate_thread.spawn();
+  zmq_loop.run();
 }

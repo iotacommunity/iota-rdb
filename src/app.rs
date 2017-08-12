@@ -1,7 +1,11 @@
 use clap::{App, Arg};
 
-const DEFAULT_MILESTONE_ADDRESS: &str = "KPWCHICGJZXKE9GSUDXZYUAPLHAKAHYHDXNPHENTERYMMBQOPSQIDENXKLKCEYCPVTZQLEEJVYJZV9BWU";
+const DEFAULT_UPDATE_INTERVAL: &str = "1000";
+const DEFAULT_MILESTONE_ADDRESS: &str =
+  "KPWCHICGJZXKE9GSUDXZYUAPLHAKAHYHDXNPHENTE\
+   RYMMBQOPSQIDENXKLKCEYCPVTZQLEEJVYJZV9BWU";
 const DEFAULT_MILESTONE_START_INDEX: &str = "62000";
+const DEFAULT_LOG_CONFIG: &str = "log4rs.yaml";
 
 pub fn build<'a, 'b>() -> App<'a, 'b> {
   app_from_crate!()
@@ -24,22 +28,13 @@ pub fn build<'a, 'b>() -> App<'a, 'b> {
         .help("MySQL destination server URI"),
     )
     .arg(
-      Arg::with_name("approve_threads_count")
-        .short("a")
-        .long("approve-threads")
+      Arg::with_name("update_interval")
+        .short("u")
+        .long("update-interval")
         .takes_value(true)
-        .value_name("COUNT")
-        .default_value("1")
-        .help("Count of milestone approval worker threads"),
-    )
-    .arg(
-      Arg::with_name("solidate_threads_count")
-        .short("s")
-        .long("solidate-threads")
-        .takes_value(true)
-        .value_name("COUNT")
-        .default_value("1")
-        .help("Count of solidity check worker threads"),
+        .value_name("INTERVAL")
+        .default_value(DEFAULT_UPDATE_INTERVAL)
+        .help("MySQL update interval in milliseconds"),
     )
     .arg(
       Arg::with_name("milestone_address")
@@ -60,9 +55,12 @@ pub fn build<'a, 'b>() -> App<'a, 'b> {
         .help("Milestone start index"),
     )
     .arg(
-      Arg::with_name("VERBOSE")
-        .short("v")
-        .long("verbose")
-        .help("Prints flowing messages"),
+      Arg::with_name("log_config")
+        .short("C")
+        .long("log-config")
+        .takes_value(true)
+        .value_name("FILE")
+        .default_value(DEFAULT_LOG_CONFIG)
+        .help("Path to log4rs configuration file"),
     )
 }

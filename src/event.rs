@@ -1,5 +1,4 @@
-use mysql;
-use query::Result;
+use mysql::{self, QueryResult, Result};
 
 const QUERY: &str = r#"
   INSERT INTO txload (
@@ -12,7 +11,7 @@ const QUERY: &str = r#"
 pub fn new_transaction_received(
   conn: &mut mysql::Conn,
   timestamp: f64,
-) -> Result<()> {
+) -> Result<QueryResult> {
   conn.prep_exec(
     QUERY,
     params!{
@@ -20,14 +19,13 @@ pub fn new_transaction_received(
       "count" => 1,
       "timestamp" => timestamp,
     },
-  )?;
-  Ok(())
+  )
 }
 
 pub fn milestone_received(
   conn: &mut mysql::Conn,
   timestamp: f64,
-) -> Result<()> {
+) -> Result<QueryResult> {
   conn.prep_exec(
     QUERY,
     params!{
@@ -35,15 +33,14 @@ pub fn milestone_received(
       "count" => 1,
       "timestamp" => timestamp,
     },
-  )?;
-  Ok(())
+  )
 }
 
-pub fn subtanble_confirmation(
+pub fn subtangle_confirmation(
   conn: &mut mysql::Conn,
   timestamp: f64,
   count: i32,
-) -> Result<()> {
+) -> Result<QueryResult> {
   conn.prep_exec(
     QUERY,
     params!{
@@ -51,14 +48,13 @@ pub fn subtanble_confirmation(
       "count" => count,
       "timestamp" => timestamp,
     },
-  )?;
-  Ok(())
+  )
 }
 
 pub fn unsolid_transaction(
   conn: &mut mysql::Conn,
   timestamp: f64,
-) -> Result<()> {
+) -> Result<QueryResult> {
   conn.prep_exec(
     QUERY,
     params!{
@@ -66,15 +62,14 @@ pub fn unsolid_transaction(
       "count" => 1,
       "timestamp" => timestamp,
     },
-  )?;
-  Ok(())
+  )
 }
 
 pub fn subtangle_solidation(
   conn: &mut mysql::Conn,
   timestamp: f64,
   count: i32,
-) -> Result<()> {
+) -> Result<QueryResult> {
   conn.prep_exec(
     QUERY,
     params!{
@@ -82,6 +77,5 @@ pub fn subtangle_solidation(
       "count" => count,
       "timestamp" => timestamp,
     },
-  )?;
-  Ok(())
+  )
 }
