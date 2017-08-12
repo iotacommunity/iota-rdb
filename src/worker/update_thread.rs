@@ -49,7 +49,7 @@ impl<'a> UpdateThread<'a> {
   }
 }
 
-pub fn perform(
+fn perform(
   conn: &mut mysql::Conn,
   transaction_mapper: &TransactionMapper,
   address_mapper: &AddressMapper,

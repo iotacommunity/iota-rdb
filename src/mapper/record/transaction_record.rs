@@ -19,6 +19,7 @@ pub struct TransactionRecord {
   last_idx: i32,
   da: i32,
   height: i32,
+  weight: f64,
   is_mst: bool,
   mst_a: bool,
   solid: Solid,
@@ -39,6 +40,7 @@ const SELECT_QUERY: &str = r#"
     last_idx,
     da,
     height,
+    weight,
     is_mst,
     mst_a,
     solid
@@ -71,6 +73,7 @@ impl Record for TransactionRecord {
       last_idx,
       da,
       height,
+      weight,
       is_mst,
       mst_a,
       solid
@@ -88,6 +91,7 @@ impl Record for TransactionRecord {
       :last_idx,
       :da,
       :height,
+      :weight,
       :is_mst,
       :mst_a,
       :solid
@@ -105,6 +109,7 @@ impl Record for TransactionRecord {
       last_idx = :last_idx,
       da = :da,
       height = :height,
+      weight = :weight,
       is_mst = :is_mst,
       mst_a = :mst_a,
       solid = :solid
@@ -128,6 +133,7 @@ impl Record for TransactionRecord {
       last_idx: row.take_opt("last_idx").unwrap_or_else(|| Ok(0))?,
       da: row.take_opt("da").unwrap_or_else(|| Ok(0))?,
       height: row.take_opt("height").unwrap_or_else(|| Ok(0))?,
+      weight: row.take_opt("weight").unwrap_or_else(|| Ok(1.0))?,
       is_mst: row.take_opt("is_mst").unwrap_or_else(|| Ok(false))?,
       mst_a: row.take_opt("mst_a").unwrap_or_else(|| Ok(false))?,
       solid: Solid::from_db(row.take_opt("solid").unwrap_or_else(|| Ok(0))?),
@@ -149,6 +155,7 @@ impl Record for TransactionRecord {
       "last_idx" => self.last_idx,
       "da" => self.da,
       "height" => self.height,
+      "weight" => self.weight,
       "is_mst" => self.is_mst,
       "mst_a" => self.mst_a,
       "solid" => self.solid.into_db(),
@@ -179,6 +186,7 @@ impl TransactionRecord {
   impl_accessors!(current_idx, set_current_idx, i32);
   impl_accessors!(last_idx, set_last_idx, i32);
   impl_accessors!(height, set_height, i32);
+  impl_accessors!(weight, set_weight, f64);
   impl_accessors!(is_mst, set_is_mst, bool);
   impl_accessors!(mst_a, set_mst_a, bool);
   impl_accessors!(solid, set_solid, Solid);
@@ -200,6 +208,7 @@ impl TransactionRecord {
       last_idx: 0,
       da: 0,
       height: 0,
+      weight: 1.0,
       is_mst: false,
       mst_a: false,
       solid: Solid::None,
@@ -239,10 +248,8 @@ impl TransactionRecord {
     self.da += 1;
   }
 
-  pub fn approve(&mut self) {
-    if !self.mst_a {
-      self.modified = true;
-      self.mst_a = true;
-    }
+  pub fn add_weight(&mut self, value: f64) {
+    let weight = self.weight;
+    self.set_weight(weight + value);
   }
 }

@@ -102,7 +102,7 @@ impl<'a> InsertThread<'a> {
   }
 }
 
-pub fn perform(
+fn perform(
   conn: &mut mysql::Conn,
   transaction_mapper: &TransactionMapper,
   address_mapper: &AddressMapper,
@@ -121,8 +121,9 @@ pub fn perform(
   if !is_valid(message, null_hash) {
     return Ok((approve_data, solidate_data, calculate_data));
   }
-  let hashes =
-    vec![message.hash(), message.trunk_hash(), message.branch_hash()];
+  let mut hashes =
+    vec![message.trunk_hash(), message.branch_hash(), message.hash()];
+  hashes.dedup();
   let txs = transaction_mapper.fetch_many(conn, hashes)?;
   let mut txs = txs.iter().map(|tx| tx.lock().unwrap()).collect();
   let txs = unwrap_transactions(&mut txs, message);
@@ -149,7 +150,7 @@ pub fn perform(
     current_tx.set_is_mst(message.is_milestone());
     current_tx.set_mst_a(message.is_milestone());
     insert_events(conn, message, current_tx, timestamp)?;
-    set_approve_data(&mut approve_data, message, trunk_tx, &branch_tx);
+    set_approve_data(&mut approve_data, current_tx);
     set_solidate_data(&mut solidate_data, current_tx);
     set_calculate_data(&mut calculate_data, current_tx);
     current_tx.insert(conn)?;
@@ -296,13 +297,16 @@ fn insert_events(
 
 fn set_approve_data(
   approve_data: &mut Option<ApproveMessage>,
-  message: &TransactionMessage,
-  trunk_tx: &TransactionRecord,
-  branch_tx: &Option<&mut TransactionRecord>,
+  current_tx: &TransactionRecord,
 ) {
-  if message.is_milestone() {
-    *approve_data =
-      Some((trunk_tx.id_tx(), branch_tx.as_ref().map(|tx| tx.id_tx())));
+  if current_tx.mst_a() {
+    if let Some(id_trunk) = current_tx.id_trunk() {
+      if let Some(id_branch) = current_tx.id_branch() {
+        *approve_data = Some(ApproveMessage::Front(id_trunk, id_branch));
+      }
+    }
+  } else {
+    *approve_data = Some(ApproveMessage::Reverse(current_tx.id_tx()));
   }
 }
 

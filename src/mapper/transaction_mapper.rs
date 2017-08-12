@@ -69,10 +69,8 @@ impl TransactionMapper {
   pub fn fetch_many(
     &self,
     conn: &mut mysql::Conn,
-    mut input: Vec<&str>,
+    input: Vec<&str>,
   ) -> Result<Vec<Arc<Mutex<TransactionRecord>>>> {
-    input.sort_unstable();
-    input.dedup();
     let mut missing = input.clone();
     {
       let hashes = self.hashes.read().unwrap();

@@ -70,13 +70,13 @@ pub trait Mapper<'a>: Sized {
     match cached {
       Some(id) => Ok(id),
       None => {
+        let mut records = self.records().write().unwrap();
+        let mut hashes = self.hashes().write().unwrap();
+        let mut indices = self.indices();
         let record = match Self::Record::find_by_hash(conn, hash)? {
           Some(record) => record,
           None => f(self.next_counter())?,
         };
-        let mut records = self.records().write().unwrap();
-        let mut hashes = self.hashes().write().unwrap();
-        let mut indices = self.indices();
         let (id, _) =
           Self::store(&mut records, &mut hashes, &mut indices, record);
         Ok(id)
