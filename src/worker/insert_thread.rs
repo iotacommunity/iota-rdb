@@ -70,7 +70,7 @@ impl<'a> InsertThread<'a> {
             let duration = duration.elapsed().as_milliseconds();
             match result {
               Ok((approve_data, solidate_data, calculate_data)) => {
-                info!("{}ms {}", duration, message.hash());
+                info!("{:.3}ms {}", duration, message.hash());
                 if let Some(approve_data) = approve_data {
                   approve_tx
                     .send(approve_data)
@@ -88,13 +88,13 @@ impl<'a> InsertThread<'a> {
                 }
               }
               Err(err) => {
-                error!("{}ms Processing failure: {}", duration, err);
+                error!("{:.3}ms Processing failure: {}", duration, err);
               }
             }
           }
           Err(err) => {
             let duration = duration.elapsed().as_milliseconds();
-            error!("{}ms Parsing failure: {}", duration, err);
+            error!("{:.3}ms Parsing failure: {}", duration, err);
           }
         }
       }

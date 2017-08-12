@@ -19,14 +19,12 @@ mod app;
 mod args;
 mod worker;
 mod message;
-mod counter;
 mod mapper;
 mod solid;
 mod event;
 mod utils;
 
 use args::Args;
-use counter::Counter;
 use mapper::{AddressMapper, BundleMapper, Mapper, TransactionMapper};
 use std::process::exit;
 use std::sync::{mpsc, Arc};
@@ -56,25 +54,26 @@ fn main() {
   let (approve_tx, approve_rx) = mpsc::channel();
   let (solidate_tx, solidate_rx) = mpsc::channel();
   let (calculate_tx, calculate_rx) = mpsc::channel();
-  let counter = Arc::new(Counter::new(mysql_uri).expect("Counter failure"));
-  let transaction_mapper = Arc::new(
-    TransactionMapper::new(counter.clone())
-      .expect("Transaction mapper failure"),
-  );
-  let address_mapper = Arc::new(
-    AddressMapper::new(counter.clone()).expect("Address mapper failure"),
-  );
-  let bundle_mapper = Arc::new(
-    BundleMapper::new(counter.clone()).expect("Bundle mapper failure"),
-  );
   let ctx = zmq::Context::new();
   let socket = ctx.socket(zmq::SUB).expect("ZMQ socket create failure");
   socket.connect(zmq_uri).expect("ZMQ socket connect failure");
   socket.set_subscribe(b"tx ").expect("ZMQ subscribe failure");
 
+  let mut conn = mysql::Conn::new(mysql_uri).expect("MySQL connection failure");
+  let transaction_mapper = Arc::new(
+    TransactionMapper::new(&mut conn).expect("Transaction mapper failure"),
+  );
+  let address_mapper = Arc::new(
+    AddressMapper::new(&mut conn).expect("Address mapper failure"),
+  );
+  let bundle_mapper =
+    Arc::new(BundleMapper::new(&mut conn).expect("Bundle mapper failure"));
+
   info!("Milestone address: {}", milestone_address);
   info!("Milestone start index string: {}", milestone_start_index);
-  info!("Highest ids: {}", counter);
+  info!("Initial `id_tx`: {}", transaction_mapper.current_id());
+  info!("Initial `id_address`: {}", address_mapper.current_id());
+  info!("Initial `id_bundle`: {}", bundle_mapper.current_id());
 
   let insert_thread = InsertThread {
     insert_rx,

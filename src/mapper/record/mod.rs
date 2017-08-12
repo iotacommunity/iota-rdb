@@ -31,13 +31,12 @@ pub trait Record: Sized {
   }
 
   fn find_by_hash(conn: &mut mysql::Conn, hash: &str) -> Result<Option<Self>> {
-    match conn.first_exec(
-      format!("{} {}", Self::SELECT_QUERY, Self::SELECT_WHERE_HASH),
-      (hash,),
-    )? {
-      Some(ref mut row) => Ok(Some(Self::from_row(row)?)),
-      None => Ok(None),
-    }
+    Ok(conn
+      .first_exec(
+        format!("{} {}", Self::SELECT_QUERY, Self::SELECT_WHERE_HASH),
+        (hash,),
+      )?
+      .map_or_else(|| Ok(None), |mut row| Self::from_row(&mut row).map(Some))?)
   }
 
   fn insert(&mut self, conn: &mut mysql::Conn) -> Result<()> {

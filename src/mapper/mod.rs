@@ -10,7 +10,6 @@ pub use self::error::{Error, Result};
 pub use self::record::{AddressRecord, BundleRecord, Record, TransactionRecord};
 pub use self::transaction_mapper::TransactionMapper;
 
-use counter::Counter;
 use mysql;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
@@ -19,7 +18,9 @@ pub trait Mapper<'a>: Sized {
   type Record: Record;
   type Indices;
 
-  fn new(counter: Arc<Counter>) -> Result<Self>;
+  fn new(conn: &mut mysql::Conn) -> Result<Self>;
+
+  fn counter(&self) -> &Mutex<u64>;
 
   fn records(&self) -> &RwLock<HashMap<u64, Arc<Mutex<Self::Record>>>>;
 
@@ -29,7 +30,25 @@ pub trait Mapper<'a>: Sized {
 
   fn store_indices(indices: &mut Self::Indices, record: &Self::Record);
 
-  fn next_counter(&self) -> u64;
+  fn init_counter(
+    conn: &mut mysql::Conn,
+    query: &str,
+  ) -> mysql::Result<Mutex<u64>> {
+    conn
+      .first(query)
+      .and_then(|row| row.map_or_else(|| Ok(0), mysql::from_row_opt))
+      .map(Mutex::new)
+  }
+
+  fn next_id(&self) -> u64 {
+    let mut counter = self.counter().lock().unwrap();
+    *counter += 1;
+    *counter
+  }
+
+  fn current_id(&self) -> u64 {
+    *self.counter().lock().unwrap()
+  }
 
   fn fetch(
     &'a self,
@@ -40,18 +59,16 @@ pub trait Mapper<'a>: Sized {
       let records = self.records().read().unwrap();
       records.get(&id).cloned()
     };
-    match cached {
-      Some(record) => Ok(record),
-      None => {
-        let record = Self::Record::find_by_id(conn, id)?;
+    cached.map(Ok).unwrap_or_else(|| {
+      Self::Record::find_by_id(conn, id).map(|record| {
         let mut records = self.records().write().unwrap();
         let mut hashes = self.hashes().write().unwrap();
         let mut indices = self.indices();
-        let (_, record) =
-          Self::store(&mut records, &mut hashes, &mut indices, record);
-        Ok(record.clone())
-      }
-    }
+        Self::store(&mut records, &mut hashes, &mut indices, record)
+          .1
+          .clone()
+      })
+    })
   }
 
   fn fetch_or_insert<T>(
@@ -67,21 +84,22 @@ pub trait Mapper<'a>: Sized {
       let hashes = self.hashes().read().unwrap();
       hashes.get(hash).cloned()
     };
-    match cached {
-      Some(id) => Ok(id),
-      None => {
+    cached.map(Ok).unwrap_or_else(|| {
+      Self::Record::find_by_hash(conn, hash).and_then(|record| {
         let mut records = self.records().write().unwrap();
         let mut hashes = self.hashes().write().unwrap();
         let mut indices = self.indices();
-        let record = match Self::Record::find_by_hash(conn, hash)? {
-          Some(record) => record,
-          None => f(self.next_counter())?,
-        };
-        let (id, _) =
-          Self::store(&mut records, &mut hashes, &mut indices, record);
-        Ok(id)
-      }
-    }
+        record
+          .map(Ok)
+          .unwrap_or_else(|| {
+            f(self.next_id())
+              .and_then(|mut record| record.insert(conn).map(|_| record))
+          })
+          .map(|record| {
+            Self::store(&mut records, &mut hashes, &mut indices, record).0
+          })
+      })
+    })
   }
 
   fn update(&self, conn: &mut mysql::Conn) -> Result<()> {

@@ -1,5 +1,4 @@
 use super::{Mapper, Record, Result, TransactionRecord};
-use counter::Counter;
 use mysql;
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -11,7 +10,7 @@ type Index<K, V> = HashMap<K, Arc<Mutex<Vec<V>>>>;
 type IndexGuard<'a, K, V> = RwLockWriteGuard<'a, Index<K, V>>;
 
 pub struct TransactionMapper {
-  counter: Arc<Counter>,
+  counter: Mutex<u64>,
   records: Records,
   hashes: Hashes,
   trunks: RwLock<Index<u64, u64>>,
@@ -22,7 +21,11 @@ impl<'a> Mapper<'a> for TransactionMapper {
   type Record = TransactionRecord;
   type Indices = (IndexGuard<'a, u64, u64>, IndexGuard<'a, u64, u64>);
 
-  fn new(counter: Arc<Counter>) -> Result<Self> {
+  fn new(conn: &mut mysql::Conn) -> Result<Self> {
+    let counter = Self::init_counter(
+      conn,
+      r"SELECT id_tx FROM tx ORDER BY id_tx DESC LIMIT 1",
+    )?;
     let records = RwLock::new(HashMap::new());
     let hashes = RwLock::new(HashMap::new());
     let trunks = RwLock::new(HashMap::new());
@@ -34,6 +37,10 @@ impl<'a> Mapper<'a> for TransactionMapper {
       trunks,
       branches,
     })
+  }
+
+  fn counter(&self) -> &Mutex<u64> {
+    &self.counter
   }
 
   fn records(&self) -> &Records {
@@ -58,10 +65,6 @@ impl<'a> Mapper<'a> for TransactionMapper {
     if let Some(id_branch) = record.id_branch() {
       store_index(branches, id_branch, record.id());
     }
-  }
-
-  fn next_counter(&self) -> u64 {
-    self.counter.next_transaction()
   }
 }
 
@@ -94,10 +97,7 @@ impl TransactionMapper {
               .find(|record| record.hash() == hash)
               .cloned()
               .unwrap_or_else(|| {
-                TransactionRecord::placeholder(
-                  hash.to_owned(),
-                  self.next_counter(),
-                )
+                TransactionRecord::placeholder(hash.to_owned(), self.next_id())
               });
             let (id_tx, record) =
               Self::store(&mut records, &mut hashes, &mut indices, record);

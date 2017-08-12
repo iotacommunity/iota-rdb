@@ -53,10 +53,10 @@ impl<'a> ApproveThread<'a> {
         let duration = duration.elapsed().as_milliseconds();
         match result {
           Ok(()) => {
-            info!("{}ms {:?}", duration, message);
+            info!("{:.3}ms {:?}", duration, message);
           }
           Err(err) => {
-            error!("{}ms {}", duration, err);
+            error!("{:.3}ms {}", duration, err);
           }
         }
       }

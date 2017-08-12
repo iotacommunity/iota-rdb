@@ -38,10 +38,10 @@ impl<'a> UpdateThread<'a> {
         let duration = duration.elapsed().as_milliseconds();
         match result {
           Ok(()) => {
-            info!("{}ms Ok", duration);
+            info!("{:.3}ms Ok", duration);
           }
           Err(err) => {
-            error!("{}ms {}", duration, err);
+            error!("{:.3}ms {}", duration, err);
           }
         }
       }
