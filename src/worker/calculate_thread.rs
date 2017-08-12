@@ -4,6 +4,8 @@ use mysql;
 use std::collections::VecDeque;
 use std::sync::{mpsc, Arc};
 use std::thread;
+use std::time::Instant;
+use utils::DurationUtils;
 
 pub type CalculateMessage = u64;
 
@@ -27,12 +29,15 @@ impl<'a> CalculateThread<'a> {
       loop {
         let message =
           calculate_rx.recv().expect("Thread communication failure");
-        match perform(&mut conn, transaction_mapper, &message) {
+        let duration = Instant::now();
+        let result = perform(&mut conn, transaction_mapper, &message);
+        let duration = duration.elapsed().as_milliseconds();
+        match result {
           Ok(()) => {
-            info!("{:?}", message);
+            info!("{}ms {:?}", duration, message);
           }
           Err(err) => {
-            error!("{}", err);
+            error!("{}ms {}", duration, err);
           }
         }
       }

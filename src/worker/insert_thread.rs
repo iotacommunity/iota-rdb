@@ -7,7 +7,8 @@ use mysql;
 use solid::{Solid, Solidate};
 use std::sync::{mpsc, Arc, MutexGuard};
 use std::thread;
-use utils;
+use std::time::{Instant, SystemTime};
+use utils::{self, DurationUtils, SystemTimeUtils};
 use worker::{ApproveMessage, CalculateMessage, SolidateMessage};
 
 const HASH_SIZE: usize = 81;
@@ -50,43 +51,50 @@ impl<'a> InsertThread<'a> {
       let bundle_mapper = &*bundle_mapper;
       loop {
         let message = insert_rx.recv().expect("Thread communication failure");
-        match TransactionMessage::parse(
+        let duration = Instant::now();
+        let result = TransactionMessage::parse(
           &message,
           &milestone_address,
           &milestone_start_index,
-        ) {
-          Ok(message) => match perform(
-            &mut conn,
-            transaction_mapper,
-            address_mapper,
-            bundle_mapper,
-            &message,
-            &null_hash,
-          ) {
-            Ok((approve_data, solidate_data, calculate_data)) => {
-              info!("{}", message.hash());
-              if let Some(approve_data) = approve_data {
-                approve_tx
-                  .send(approve_data)
-                  .expect("Thread communication failure");
+        );
+        match result {
+          Ok(message) => {
+            let result = perform(
+              &mut conn,
+              transaction_mapper,
+              address_mapper,
+              bundle_mapper,
+              &message,
+              &null_hash,
+            );
+            let duration = duration.elapsed().as_milliseconds();
+            match result {
+              Ok((approve_data, solidate_data, calculate_data)) => {
+                info!("{}ms {}", duration, message.hash());
+                if let Some(approve_data) = approve_data {
+                  approve_tx
+                    .send(approve_data)
+                    .expect("Thread communication failure");
+                }
+                if let Some(solidate_data) = solidate_data {
+                  solidate_tx
+                    .send(solidate_data)
+                    .expect("Thread communication failure");
+                }
+                if let Some(calculate_data) = calculate_data {
+                  calculate_tx
+                    .send(calculate_data)
+                    .expect("Thread communication failure");
+                }
               }
-              if let Some(solidate_data) = solidate_data {
-                solidate_tx
-                  .send(solidate_data)
-                  .expect("Thread communication failure");
-              }
-              if let Some(calculate_data) = calculate_data {
-                calculate_tx
-                  .send(calculate_data)
-                  .expect("Thread communication failure");
+              Err(err) => {
+                error!("{}ms Processing failure: {}", duration, err);
               }
             }
-            Err(err) => {
-              error!("Processing failure: {}", err);
-            }
-          },
+          }
           Err(err) => {
-            error!("Parsing failure: {}", err);
+            let duration = duration.elapsed().as_milliseconds();
+            error!("{}ms Parsing failure: {}", duration, err);
           }
         }
       }
@@ -119,7 +127,7 @@ pub fn perform(
   let mut txs = txs.iter().map(|tx| tx.lock().unwrap()).collect();
   let txs = unwrap_transactions(&mut txs, message);
   if let Some((mut current_tx, mut trunk_tx, mut branch_tx)) = txs {
-    let timestamp = utils::milliseconds_since_epoch()?;
+    let timestamp = SystemTime::milliseconds_since_epoch()?;
     let id_branch = map_branch(trunk_tx, &branch_tx, TransactionRecord::id_tx);
     solidate_genesis(trunk_tx, null_hash);
     trunk_tx.direct_approve();

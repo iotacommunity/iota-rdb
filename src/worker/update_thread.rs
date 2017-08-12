@@ -3,7 +3,8 @@ use mapper::{AddressMapper, BundleMapper, Mapper, TransactionMapper};
 use mysql;
 use std::sync::Arc;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
+use utils::DurationUtils;
 
 pub struct UpdateThread<'a> {
   pub mysql_uri: &'a str,
@@ -31,17 +32,16 @@ impl<'a> UpdateThread<'a> {
       let bundle_mapper = &*bundle_mapper;
       loop {
         thread::sleep(update_interval);
-        match perform(
-          &mut conn,
-          transaction_mapper,
-          address_mapper,
-          bundle_mapper,
-        ) {
+        let duration = Instant::now();
+        let result =
+          perform(&mut conn, transaction_mapper, address_mapper, bundle_mapper);
+        let duration = duration.elapsed().as_milliseconds();
+        match result {
           Ok(()) => {
-            info!("Ok");
+            info!("{}ms Ok", duration);
           }
           Err(err) => {
-            error!("{}", err);
+            error!("{}ms {}", duration, err);
           }
         }
       }

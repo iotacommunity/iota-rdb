@@ -1,8 +1,6 @@
 use super::super::{Error, Record, Result};
-use iota_curl_cpu::CpuCurl;
-use iota_sign::{trits_checksum, CHECKSUM_LEN};
-use iota_trytes::{char_to_trits, trits_to_string};
 use mysql;
+use utils;
 
 #[derive(Clone)]
 pub struct AddressRecord {
@@ -82,7 +80,8 @@ impl AddressRecord {
   impl_setter!(checksum, set_checksum, String);
 
   pub fn new(id_address: u64, address: String) -> Result<Self> {
-    let checksum = calculate_checksum(&address)?;
+    let checksum = utils::trits_checksum(&address)
+      .ok_or(Error::AddressChecksumToTrits)?;
     Ok(Self {
       persisted: false,
       modified: true,
@@ -91,13 +90,4 @@ impl AddressRecord {
       checksum,
     })
   }
-}
-
-fn calculate_checksum(address: &str) -> Result<String> {
-  let (mut checksum, mut curl) = ([0; CHECKSUM_LEN], CpuCurl::default());
-  let trits: Vec<_> =
-    address.chars().flat_map(char_to_trits).cloned().collect();
-  trits_checksum(&trits, &mut checksum, &mut curl);
-  Ok(trits_to_string(&checksum)
-    .ok_or(Error::AddressChecksumToTrits)?)
 }

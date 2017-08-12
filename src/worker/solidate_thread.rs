@@ -6,7 +6,8 @@ use solid::Solidate;
 use std::collections::VecDeque;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
-use utils;
+use std::time::{Instant, SystemTime};
+use utils::{DurationUtils, SystemTimeUtils};
 
 pub type SolidateMessage = (u64, i32);
 
@@ -29,12 +30,15 @@ impl<'a> SolidateThread<'a> {
       let transaction_mapper = &*transaction_mapper;
       loop {
         let message = solidate_rx.recv().expect("Thread communication failure");
-        match perform(&mut conn, transaction_mapper, &message) {
+        let duration = Instant::now();
+        let result = perform(&mut conn, transaction_mapper, &message);
+        let duration = duration.elapsed().as_milliseconds();
+        match result {
           Ok(()) => {
-            info!("{:?}", message);
+            info!("{}ms {:?}", duration, message);
           }
           Err(err) => {
-            error!("{}", err);
+            error!("{}ms {}", duration, err);
           }
         }
       }
@@ -47,7 +51,7 @@ pub fn perform(
   transaction_mapper: &TransactionMapper,
   &(id, height): &SolidateMessage,
 ) -> Result<()> {
-  let (timestamp, mut counter) = (utils::milliseconds_since_epoch()?, 0);
+  let (timestamp, mut counter) = (SystemTime::milliseconds_since_epoch()?, 0);
   let mut nodes = VecDeque::new();
   nodes.push_front((id, Some(height)));
   while let Some((id, height)) = nodes.pop_back() {

@@ -5,7 +5,8 @@ use mysql;
 use std::collections::VecDeque;
 use std::sync::{mpsc, Arc};
 use std::thread;
-use utils;
+use std::time::{Instant, SystemTime};
+use utils::{DurationUtils, SystemTimeUtils};
 
 pub type ApproveMessage = (u64, Option<u64>);
 
@@ -31,12 +32,16 @@ impl<'a> ApproveThread<'a> {
       let bundle_mapper = &*bundle_mapper;
       loop {
         let message = approve_rx.recv().expect("Thread communication failure");
-        match perform(&mut conn, transaction_mapper, bundle_mapper, &message) {
+        let duration = Instant::now();
+        let result =
+          perform(&mut conn, transaction_mapper, bundle_mapper, &message);
+        let duration = duration.elapsed().as_milliseconds();
+        match result {
           Ok(()) => {
-            info!("{:?}", message);
+            info!("{}ms {:?}", duration, message);
           }
           Err(err) => {
-            error!("{}", err);
+            error!("{}ms {}", duration, err);
           }
         }
       }
@@ -50,7 +55,7 @@ pub fn perform(
   bundle_mapper: &BundleMapper,
   &(id_trunk, id_branch): &ApproveMessage,
 ) -> Result<()> {
-  let (timestamp, mut counter) = (utils::milliseconds_since_epoch()?, 0);
+  let (timestamp, mut counter) = (SystemTime::milliseconds_since_epoch()?, 0);
   let mut nodes = VecDeque::new();
   nodes.push_front(id_trunk);
   if let Some(id_branch) = id_branch {
