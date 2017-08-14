@@ -62,6 +62,7 @@ CREATE TABLE `tx` (
   `tag` char(27) DEFAULT NULL,
   `value` bigint(14) DEFAULT '0',
   `timestamp` double DEFAULT '0',
+  `arrival` double DEFAULT '0',
   `current_idx` int(11) DEFAULT NULL,
   `last_idx` int(11) DEFAULT NULL,
   `da` int(11) DEFAULT '0',

@@ -144,6 +144,7 @@ fn perform(
     current_tx.set_tag(message.tag().to_owned());
     current_tx.set_value(message.value());
     current_tx.set_timestamp(message.timestamp());
+    current_tx.set_arrival(message.arrival());
     current_tx.set_current_idx(message.current_index());
     current_tx.set_last_idx(message.last_index());
     current_tx.set_is_mst(message.is_milestone());

@@ -15,6 +15,7 @@ pub struct TransactionMessage {
   bundle_hash: String,
   trunk_hash: String,
   branch_hash: String,
+  arrival: f64,
   is_milestone: bool,
   solid: Solid,
 }
@@ -36,6 +37,7 @@ impl TransactionMessage {
     let bundle_hash = chunks[8].to_owned();
     let trunk_hash = chunks[9].to_owned();
     let branch_hash = chunks[10].to_owned();
+    let arrival = chunks[11].parse()?;
     let is_milestone = address_hash == milestone_address;
     let solid = if is_milestone && tag == milestone_start_index {
       Solid::Complete
@@ -53,6 +55,7 @@ impl TransactionMessage {
       bundle_hash,
       trunk_hash,
       branch_hash,
+      arrival,
       is_milestone,
       solid,
     })
@@ -68,6 +71,7 @@ impl TransactionMessage {
   impl_getter!(bundle_hash, &str);
   impl_getter!(trunk_hash, &str);
   impl_getter!(branch_hash, &str);
+  impl_getter!(arrival, f64);
   impl_getter!(is_milestone, bool);
   impl_getter!(solid, Solid);
 }

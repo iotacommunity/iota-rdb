@@ -16,6 +16,7 @@ pub struct TransactionRecord {
   tag: String,
   value: i64,
   timestamp: f64,
+  arrival: f64,
   current_idx: i32,
   last_idx: i32,
   da: i32,
@@ -37,6 +38,7 @@ const SELECT_QUERY: &str = r#"
     tag,
     value,
     timestamp,
+    arrival,
     current_idx,
     last_idx,
     da,
@@ -70,6 +72,7 @@ impl Record for TransactionRecord {
       tag,
       value,
       timestamp,
+      arrival,
       current_idx,
       last_idx,
       da,
@@ -88,6 +91,7 @@ impl Record for TransactionRecord {
       :tag,
       :value,
       :timestamp,
+      :arrival,
       :current_idx,
       :last_idx,
       :da,
@@ -106,6 +110,7 @@ impl Record for TransactionRecord {
       tag = :tag,
       value = :value,
       timestamp = :timestamp,
+      arrival = :arrival,
       current_idx = :current_idx,
       last_idx = :last_idx,
       da = :da,
@@ -131,6 +136,7 @@ impl Record for TransactionRecord {
       tag: row.take_opt("tag").unwrap_or_else(|| Ok(String::from("")))?,
       value: row.take_opt("value").unwrap_or_else(|| Ok(0))?,
       timestamp: row.take_opt("timestamp").unwrap_or_else(|| Ok(0.0))?,
+      arrival: row.take_opt("arrival").unwrap_or_else(|| Ok(0.0))?,
       current_idx: row.take_opt("current_idx").unwrap_or_else(|| Ok(0))?,
       last_idx: row.take_opt("last_idx").unwrap_or_else(|| Ok(0))?,
       da: row.take_opt("da").unwrap_or_else(|| Ok(0))?,
@@ -153,6 +159,7 @@ impl Record for TransactionRecord {
       "tag" => self.tag.clone(),
       "value" => self.value,
       "timestamp" => self.timestamp,
+      "arrival" => self.arrival,
       "current_idx" => self.current_idx,
       "last_idx" => self.last_idx,
       "da" => self.da,
@@ -185,6 +192,7 @@ impl TransactionRecord {
   impl_setter!(tag, set_tag, String);
   impl_accessors!(value, set_value, i64);
   impl_accessors!(timestamp, set_timestamp, f64);
+  impl_accessors!(arrival, set_arrival, f64);
   impl_accessors!(current_idx, set_current_idx, i32);
   impl_accessors!(last_idx, set_last_idx, i32);
   impl_accessors!(da, set_da, i32);
@@ -208,6 +216,7 @@ impl TransactionRecord {
       tag: String::from(""),
       value: 0,
       timestamp: 0.0,
+      arrival: 0.0,
       current_idx: 0,
       last_idx: 0,
       da: 0,
