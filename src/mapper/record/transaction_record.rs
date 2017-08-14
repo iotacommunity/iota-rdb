@@ -4,6 +4,7 @@ use solid::Solid;
 
 #[derive(Clone)]
 pub struct TransactionRecord {
+  generation: usize,
   persisted: bool,
   modified: bool,
   hash: String,
@@ -118,6 +119,7 @@ impl Record for TransactionRecord {
 
   fn from_row(row: &mut mysql::Row) -> Result<Self> {
     Ok(Self {
+      generation: 0,
       persisted: true,
       modified: false,
       hash: row.take_opt("hash").ok_or(Error::ColumnNotFound)??,
@@ -185,6 +187,7 @@ impl TransactionRecord {
   impl_accessors!(timestamp, set_timestamp, f64);
   impl_accessors!(current_idx, set_current_idx, i32);
   impl_accessors!(last_idx, set_last_idx, i32);
+  impl_accessors!(da, set_da, i32);
   impl_accessors!(height, set_height, i32);
   impl_accessors!(weight, set_weight, f64);
   impl_accessors!(is_mst, set_is_mst, bool);
@@ -193,6 +196,7 @@ impl TransactionRecord {
 
   pub fn placeholder(hash: String, id_tx: u64) -> Self {
     Self {
+      generation: 0,
       persisted: false,
       modified: true,
       hash,
@@ -244,8 +248,8 @@ impl TransactionRecord {
   }
 
   pub fn direct_approve(&mut self) {
-    self.modified = true;
-    self.da += 1;
+    let da = self.da;
+    self.set_da(da + 1);
   }
 
   pub fn add_weight(&mut self, value: f64) {

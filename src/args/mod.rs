@@ -12,6 +12,7 @@ pub struct Args<'a> {
   pub milestone_address: &'a str,
   pub milestone_start_index: String,
   pub calculation_limit: usize,
+  pub generation_limit: usize,
   pub log_config: &'a str,
 }
 
@@ -40,6 +41,11 @@ impl<'a> Args<'a> {
       .ok_or(Error::ArgNotFound)?
       .parse()
       .map_err(Error::CalculationLimitParseInt)?;
+    let generation_limit = matches
+      .value_of("generation_limit")
+      .ok_or(Error::ArgNotFound)?
+      .parse()
+      .map_err(Error::GenerationLimitParseInt)?;
     let log_config = matches.value_of("log_config").ok_or(Error::ArgNotFound)?;
 
     Ok(Self {
@@ -49,6 +55,7 @@ impl<'a> Args<'a> {
       milestone_address,
       milestone_start_index,
       calculation_limit,
+      generation_limit,
       log_config,
     })
   }

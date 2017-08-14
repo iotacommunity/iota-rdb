@@ -4,6 +4,7 @@ use utils;
 
 #[derive(Clone)]
 pub struct AddressRecord {
+  generation: usize,
   persisted: bool,
   modified: bool,
   address: String,
@@ -46,6 +47,7 @@ impl Record for AddressRecord {
 
   fn from_row(row: &mut mysql::Row) -> Result<Self> {
     Ok(Self {
+      generation: 0,
       persisted: true,
       modified: false,
       address: row.take_opt("address").ok_or(Error::ColumnNotFound)??,
@@ -83,6 +85,7 @@ impl AddressRecord {
     let checksum = utils::trits_checksum(&address)
       .ok_or(Error::AddressChecksumToTrits)?;
     Ok(Self {
+      generation: 0,
       persisted: false,
       modified: true,
       address,

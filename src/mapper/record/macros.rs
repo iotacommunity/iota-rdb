@@ -17,7 +17,7 @@ macro_rules! impl_setter {
 
   (body, $name:ident, $self:ident, $value:ident) => {
     if $self.$name != $value {
-      $self.modified = true;
+      $self.set_modified();
       $self.$name = $value;
     }
   }
@@ -32,6 +32,10 @@ macro_rules! impl_accessors {
 
 macro_rules! impl_record {
   () => {
+    fn generation(&self) -> usize {
+      self.generation
+    }
+
     fn is_persisted(&self) -> bool {
       self.persisted
     }
@@ -44,8 +48,17 @@ macro_rules! impl_record {
       self.persisted = value;
     }
 
-    fn set_modified(&mut self, value: bool) {
-      self.modified = value;
+    fn set_modified(&mut self) {
+      self.modified = true;
+      self.generation = 0;
+    }
+
+    fn set_not_modified(&mut self) {
+      self.modified = false;
+    }
+
+    fn advance_generation(&mut self) {
+      self.generation += 1;
     }
   };
 }

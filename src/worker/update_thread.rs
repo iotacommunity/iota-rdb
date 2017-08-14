@@ -9,6 +9,7 @@ use utils::DurationUtils;
 pub struct UpdateThread<'a> {
   pub mysql_uri: &'a str,
   pub update_interval: u64,
+  pub generation_limit: usize,
   pub transaction_mapper: Arc<TransactionMapper>,
   pub address_mapper: Arc<AddressMapper>,
   pub bundle_mapper: Arc<BundleMapper>,
@@ -19,6 +20,7 @@ impl<'a> UpdateThread<'a> {
     let Self {
       mysql_uri,
       update_interval,
+      generation_limit,
       transaction_mapper,
       address_mapper,
       bundle_mapper,
@@ -33,12 +35,22 @@ impl<'a> UpdateThread<'a> {
       loop {
         thread::sleep(update_interval);
         let duration = Instant::now();
-        let result =
-          perform(&mut conn, transaction_mapper, address_mapper, bundle_mapper);
+        let result = perform(
+          &mut conn,
+          transaction_mapper,
+          generation_limit,
+          address_mapper,
+          bundle_mapper,
+        );
         let duration = duration.elapsed().as_milliseconds();
         match result {
-          Ok(()) => {
-            info!("{:.3}ms Ok", duration);
+          Ok((updated, cleaned)) => {
+            info!(
+              "{:.3}ms updated: {}, cleaned: {}",
+              duration,
+              updated,
+              cleaned
+            );
           }
           Err(err) => {
             error!("{:.3}ms {}", duration, err);
@@ -52,11 +64,16 @@ impl<'a> UpdateThread<'a> {
 fn perform(
   conn: &mut mysql::Conn,
   transaction_mapper: &TransactionMapper,
+  generation_limit: usize,
   address_mapper: &AddressMapper,
   bundle_mapper: &BundleMapper,
-) -> Result<()> {
-  transaction_mapper.update(conn)?;
-  address_mapper.update(conn)?;
-  bundle_mapper.update(conn)?;
-  Ok(())
+) -> Result<(usize, usize)> {
+  let (mut updated, mut cleaned) = (0, 0);
+  updated += transaction_mapper.update(conn)?;
+  cleaned += transaction_mapper.collect_garbage(generation_limit);
+  updated += address_mapper.update(conn)?;
+  cleaned += address_mapper.collect_garbage(generation_limit);
+  updated += bundle_mapper.update(conn)?;
+  cleaned += bundle_mapper.collect_garbage(generation_limit);
+  Ok((updated, cleaned))
 }

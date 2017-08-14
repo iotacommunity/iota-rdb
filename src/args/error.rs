@@ -6,6 +6,7 @@ pub enum Error {
   UpdateIntervalParseInt(num::ParseIntError),
   MilestoneStartIndexParseInt(num::ParseIntError),
   CalculationLimitParseInt(num::ParseIntError),
+  GenerationLimitParseInt(num::ParseIntError),
   MilestoneStartIndexToTrits,
 }
 
@@ -24,6 +25,9 @@ impl fmt::Display for Error {
       Error::CalculationLimitParseInt(ref err) => {
         write!(f, "{} (calculation-limit)", err)
       }
+      Error::GenerationLimitParseInt(ref err) => {
+        write!(f, "{} (generation-limit)", err)
+      }
       Error::MilestoneStartIndexToTrits => {
         write!(f, "can't convert to trits (milestone-start-index)")
       }
@@ -37,7 +41,8 @@ impl error::Error for Error {
       Error::ArgNotFound => "Argument not found",
       Error::UpdateIntervalParseInt(ref err) |
       Error::MilestoneStartIndexParseInt(ref err) |
-      Error::CalculationLimitParseInt(ref err) => err.description(),
+      Error::CalculationLimitParseInt(ref err) |
+      Error::GenerationLimitParseInt(ref err) => err.description(),
       Error::MilestoneStartIndexToTrits => "Can't convert to trits",
     }
   }
@@ -47,7 +52,8 @@ impl error::Error for Error {
       Error::ArgNotFound | Error::MilestoneStartIndexToTrits => None,
       Error::UpdateIntervalParseInt(ref err) |
       Error::MilestoneStartIndexParseInt(ref err) |
-      Error::CalculationLimitParseInt(ref err) => Some(err),
+      Error::CalculationLimitParseInt(ref err) |
+      Error::GenerationLimitParseInt(ref err) => Some(err),
     }
   }
 }

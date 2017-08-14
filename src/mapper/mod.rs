@@ -102,18 +102,36 @@ pub trait Mapper<'a>: Sized {
     })
   }
 
-  fn update(&self, conn: &mut mysql::Conn) -> Result<()> {
+  fn update(&self, conn: &mut mysql::Conn) -> Result<usize> {
+    let mut counter = 0;
     let records = {
       let records = self.records().read().unwrap();
       records.values().cloned().collect::<Vec<_>>()
     };
     for record in records {
       let mut record = record.lock().unwrap();
-      if record.is_persisted() && record.is_modified() {
-        record.update(conn)?;
+      if !record.is_persisted() {
+        continue;
       }
+      if record.is_modified() {
+        record.update(conn)?;
+        counter += 1;
+      }
+      record.advance_generation();
     }
-    Ok(())
+    Ok(counter)
+  }
+
+  fn collect_garbage(&self, generation_limit: usize) -> usize {
+    let mut records = self.records().write().unwrap();
+    let init_len = records.len();
+    records.retain(|_, reference| {
+      let record = reference.lock().unwrap();
+      !record.is_persisted() || record.is_modified() ||
+        record.generation() <= generation_limit ||
+        Arc::strong_count(reference) > 1
+    });
+    init_len - records.len()
   }
 
   fn store<'b>(

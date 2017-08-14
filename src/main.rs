@@ -44,6 +44,7 @@ fn main() {
     milestone_address,
     milestone_start_index,
     calculation_limit,
+    generation_limit,
     log_config,
   } = args;
   log4rs::init_file(log_config, Default::default()).unwrap_or_else(|err| {
@@ -91,6 +92,7 @@ fn main() {
   let update_thread = UpdateThread {
     mysql_uri,
     update_interval,
+    generation_limit,
     transaction_mapper: transaction_mapper.clone(),
     address_mapper: address_mapper.clone(),
     bundle_mapper: bundle_mapper.clone(),

@@ -23,7 +23,7 @@ pub trait Record: Sized {
   fn find_by_id(conn: &mut mysql::Conn, id: u64) -> Result<Self> {
     Ok(conn
       .first_exec(
-        format!("{}, {}", Self::SELECT_QUERY, Self::SELECT_WHERE_ID),
+        format!("{} {}", Self::SELECT_QUERY, Self::SELECT_WHERE_ID),
         (id,),
       )?
       .ok_or(Error::RecordNotFound)
@@ -42,17 +42,19 @@ pub trait Record: Sized {
   fn insert(&mut self, conn: &mut mysql::Conn) -> Result<()> {
     conn.prep_exec(Self::INSERT_QUERY, self.to_params())?;
     self.set_persisted(true);
-    self.set_modified(false);
+    self.set_not_modified();
     Ok(())
   }
 
   fn update(&mut self, conn: &mut mysql::Conn) -> Result<()> {
     conn.prep_exec(Self::UPDATE_QUERY, self.to_params())?;
-    self.set_modified(false);
+    self.set_not_modified();
     Ok(())
   }
 
   fn to_params(&self) -> Vec<(String, mysql::Value)>;
+
+  fn generation(&self) -> usize;
 
   fn is_persisted(&self) -> bool;
 
@@ -60,7 +62,11 @@ pub trait Record: Sized {
 
   fn set_persisted(&mut self, value: bool);
 
-  fn set_modified(&mut self, value: bool);
+  fn set_modified(&mut self);
+
+  fn set_not_modified(&mut self);
+
+  fn advance_generation(&mut self);
 
   fn id(&self) -> u64;
 
