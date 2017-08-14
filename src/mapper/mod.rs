@@ -86,9 +86,6 @@ pub trait Mapper<'a>: Sized {
     };
     cached.map(Ok).unwrap_or_else(|| {
       Self::Record::find_by_hash(conn, hash).and_then(|record| {
-        let mut records = self.records().write().unwrap();
-        let mut hashes = self.hashes().write().unwrap();
-        let mut indices = self.indices();
         record
           .map(Ok)
           .unwrap_or_else(|| {
@@ -96,6 +93,9 @@ pub trait Mapper<'a>: Sized {
               .and_then(|mut record| record.insert(conn).map(|_| record))
           })
           .map(|record| {
+            let mut records = self.records().write().unwrap();
+            let mut hashes = self.hashes().write().unwrap();
+            let mut indices = self.indices();
             Self::store(&mut records, &mut hashes, &mut indices, record).0
           })
       })
