@@ -28,7 +28,7 @@ use args::Args;
 use mapper::{AddressMapper, BundleMapper, Mapper, TransactionMapper};
 use std::process::exit;
 use std::sync::{mpsc, Arc};
-use worker::{ApproveThread, CalculateThread, InsertThread, SolidateThread,
+use worker::{ApproveThread, CalculateThreads, InsertThread, SolidateThread,
              UpdateThread, ZmqLoop};
 
 fn main() {
@@ -41,10 +41,11 @@ fn main() {
     zmq_uri,
     mysql_uri,
     update_interval,
-    milestone_address,
-    milestone_start_index,
+    calculation_threads,
     calculation_limit,
     generation_limit,
+    milestone_address,
+    milestone_start_index,
     log_config,
   } = args;
   log4rs::init_file(log_config, Default::default()).unwrap_or_else(|err| {
@@ -108,9 +109,10 @@ fn main() {
     mysql_uri,
     transaction_mapper: transaction_mapper.clone(),
   };
-  let calculate_thread = CalculateThread {
+  let calculate_threads = CalculateThreads {
     calculate_rx,
     mysql_uri,
+    calculation_threads,
     calculation_limit,
     transaction_mapper: transaction_mapper.clone(),
   };
@@ -120,6 +122,6 @@ fn main() {
   update_thread.spawn();
   approve_thread.spawn();
   solidate_thread.spawn();
-  calculate_thread.spawn();
+  calculate_threads.spawn();
   zmq_loop.run();
 }

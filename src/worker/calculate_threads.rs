@@ -9,42 +9,52 @@ use utils::DurationUtils;
 
 pub type CalculateMessage = u64;
 
-pub struct CalculateThread<'a> {
+pub struct CalculateThreads<'a> {
   pub calculate_rx: mpsc::Receiver<CalculateMessage>,
   pub mysql_uri: &'a str,
+  pub calculation_threads: usize,
   pub calculation_limit: usize,
   pub transaction_mapper: Arc<TransactionMapper>,
 }
 
-impl<'a> CalculateThread<'a> {
+impl<'a> CalculateThreads<'a> {
   pub fn spawn(self) {
     let Self {
       calculate_rx,
       mysql_uri,
+      calculation_threads,
       calculation_limit,
       transaction_mapper,
     } = self;
-    let mut conn =
-      mysql::Conn::new(mysql_uri).expect("MySQL connection failure");
-    thread::spawn(move || {
-      let transaction_mapper = &*transaction_mapper;
-      loop {
-        let message =
-          calculate_rx.recv().expect("Thread communication failure");
-        let duration = Instant::now();
-        let result =
-          perform(&mut conn, transaction_mapper, calculation_limit, &message);
-        let duration = duration.elapsed().as_milliseconds();
-        match result {
-          Ok(()) => {
-            info!("{:.3}ms {:?}", duration, message);
-          }
-          Err(err) => {
-            error!("{:.3}ms {}", duration, err);
+    let calculate_rx = Arc::new(Mutex::new(calculate_rx));
+    for i in 0..calculation_threads {
+      let mut conn =
+        mysql::Conn::new(mysql_uri).expect("MySQL connection failure");
+      let transaction_mapper = transaction_mapper.clone();
+      let calculate_rx = calculate_rx.clone();
+      thread::spawn(move || {
+        let transaction_mapper = &*transaction_mapper;
+        let calculate_rx = &*calculate_rx;
+        loop {
+          let message = {
+            let rx = calculate_rx.lock().unwrap();
+            rx.recv().expect("Thread communication failure")
+          };
+          let duration = Instant::now();
+          let result =
+            perform(&mut conn, transaction_mapper, calculation_limit, &message);
+          let duration = duration.elapsed().as_milliseconds();
+          match result {
+            Ok(()) => {
+              info!("#{} {:.3}ms {:?}", i, duration, message);
+            }
+            Err(err) => {
+              error!("#{} {:.3}ms {}", i, duration, err);
+            }
           }
         }
-      }
-    });
+      });
+    }
   }
 }
 

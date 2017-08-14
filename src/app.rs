@@ -1,12 +1,13 @@
 use clap::{App, Arg};
 
 const DEFAULT_UPDATE_INTERVAL: &str = "1000";
+const DEFAULT_CALCULATION_THREADS: &str = "1";
+const DEFAULT_CALCULATION_LIMIT: &str = "1000";
+const DEFAULT_GENERATION_LIMIT: &str = "10";
 const DEFAULT_MILESTONE_ADDRESS: &str =
   "KPWCHICGJZXKE9GSUDXZYUAPLHAKAHYHDXNPHENTE\
    RYMMBQOPSQIDENXKLKCEYCPVTZQLEEJVYJZV9BWU";
 const DEFAULT_MILESTONE_START_INDEX: &str = "62000";
-const DEFAULT_CALCULATION_LIMIT: &str = "1000";
-const DEFAULT_GENERATION_LIMIT: &str = "10";
 const DEFAULT_LOG_CONFIG: &str = "log4rs.yaml";
 
 pub fn build<'a, 'b>() -> App<'a, 'b> {
@@ -39,22 +40,13 @@ pub fn build<'a, 'b>() -> App<'a, 'b> {
         .help("MySQL update interval in milliseconds"),
     )
     .arg(
-      Arg::with_name("milestone_address")
-        .short("M")
-        .long("milestone-address")
+      Arg::with_name("calculation_threads")
+        .short("T")
+        .long("calculation-threads")
         .takes_value(true)
-        .value_name("ADDRESS")
-        .default_value(DEFAULT_MILESTONE_ADDRESS)
-        .help("Milestone address"),
-    )
-    .arg(
-      Arg::with_name("milestone_start_index")
-        .short("I")
-        .long("milestone-start-index")
-        .takes_value(true)
-        .value_name("INDEX")
-        .default_value(DEFAULT_MILESTONE_START_INDEX)
-        .help("Milestone start index"),
+        .value_name("THREADS")
+        .default_value(DEFAULT_CALCULATION_THREADS)
+        .help("Number of calculation threads"),
     )
     .arg(
       Arg::with_name("calculation_limit")
@@ -73,6 +65,24 @@ pub fn build<'a, 'b>() -> App<'a, 'b> {
         .value_name("LIMIT")
         .default_value(DEFAULT_GENERATION_LIMIT)
         .help("Garbage collector generation limit"),
+    )
+    .arg(
+      Arg::with_name("milestone_address")
+        .short("M")
+        .long("milestone-address")
+        .takes_value(true)
+        .value_name("ADDRESS")
+        .default_value(DEFAULT_MILESTONE_ADDRESS)
+        .help("Milestone address"),
+    )
+    .arg(
+      Arg::with_name("milestone_start_index")
+        .short("I")
+        .long("milestone-start-index")
+        .takes_value(true)
+        .value_name("INDEX")
+        .default_value(DEFAULT_MILESTONE_START_INDEX)
+        .help("Milestone start index"),
     )
     .arg(
       Arg::with_name("log_config")

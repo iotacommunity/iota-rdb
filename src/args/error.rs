@@ -4,9 +4,10 @@ use std::{error, fmt, num, result};
 pub enum Error {
   ArgNotFound,
   UpdateIntervalParseInt(num::ParseIntError),
-  MilestoneStartIndexParseInt(num::ParseIntError),
+  CalculationThreadsParseInt(num::ParseIntError),
   CalculationLimitParseInt(num::ParseIntError),
   GenerationLimitParseInt(num::ParseIntError),
+  MilestoneStartIndexParseInt(num::ParseIntError),
   MilestoneStartIndexToTrits,
 }
 
@@ -19,14 +20,17 @@ impl fmt::Display for Error {
       Error::UpdateIntervalParseInt(ref err) => {
         write!(f, "{} (update-interval)", err)
       }
-      Error::MilestoneStartIndexParseInt(ref err) => {
-        write!(f, "{} (milestone-start-index)", err)
+      Error::CalculationThreadsParseInt(ref err) => {
+        write!(f, "{} (calculation-threads)", err)
       }
       Error::CalculationLimitParseInt(ref err) => {
         write!(f, "{} (calculation-limit)", err)
       }
       Error::GenerationLimitParseInt(ref err) => {
         write!(f, "{} (generation-limit)", err)
+      }
+      Error::MilestoneStartIndexParseInt(ref err) => {
+        write!(f, "{} (milestone-start-index)", err)
       }
       Error::MilestoneStartIndexToTrits => {
         write!(f, "can't convert to trits (milestone-start-index)")
@@ -40,9 +44,10 @@ impl error::Error for Error {
     match *self {
       Error::ArgNotFound => "Argument not found",
       Error::UpdateIntervalParseInt(ref err) |
-      Error::MilestoneStartIndexParseInt(ref err) |
+      Error::CalculationThreadsParseInt(ref err) |
       Error::CalculationLimitParseInt(ref err) |
-      Error::GenerationLimitParseInt(ref err) => err.description(),
+      Error::GenerationLimitParseInt(ref err) |
+      Error::MilestoneStartIndexParseInt(ref err) => err.description(),
       Error::MilestoneStartIndexToTrits => "Can't convert to trits",
     }
   }
@@ -51,9 +56,10 @@ impl error::Error for Error {
     match *self {
       Error::ArgNotFound | Error::MilestoneStartIndexToTrits => None,
       Error::UpdateIntervalParseInt(ref err) |
-      Error::MilestoneStartIndexParseInt(ref err) |
+      Error::CalculationThreadsParseInt(ref err) |
       Error::CalculationLimitParseInt(ref err) |
-      Error::GenerationLimitParseInt(ref err) => Some(err),
+      Error::GenerationLimitParseInt(ref err) |
+      Error::MilestoneStartIndexParseInt(ref err) => Some(err),
     }
   }
 }
