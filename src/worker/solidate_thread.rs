@@ -52,7 +52,9 @@ fn perform(
   &(pivot_id, height): &SolidateMessage,
 ) -> Result<()> {
   let (timestamp, mut counter) = (SystemTime::milliseconds_since_epoch()?, 0);
-  let (mut nodes, mut visited) = (VecDeque::new(), HashSet::new());
+  let mut nodes = VecDeque::new();
+  let mut branch_visited = HashSet::new();
+  let mut trunk_visited = HashSet::new();
   nodes.push_front((pivot_id, Some(height)));
   while let Some((id, height)) = nodes.pop_back() {
     counter += 1;
@@ -61,7 +63,7 @@ fn perform(
         conn,
         transaction_mapper,
         &mut nodes,
-        &mut visited,
+        &mut trunk_visited,
         &references,
         height,
         Solidate::Trunk,
@@ -72,7 +74,7 @@ fn perform(
         conn,
         transaction_mapper,
         &mut nodes,
-        &mut visited,
+        &mut branch_visited,
         &references,
         None,
         Solidate::Branch,
@@ -94,14 +96,11 @@ fn solidate_references(
   height: Option<i32>,
   solidate: Solidate,
 ) -> Result<()> {
-  for id in &*references.lock().unwrap() {
-    if visited.contains(id) {
+  for &id in &*references.lock().unwrap() {
+    if !visited.insert(id) {
       continue;
     }
-    if height.is_some() {
-      visited.insert(*id);
-    }
-    let record = transaction_mapper.fetch(conn, *id)?;
+    let record = transaction_mapper.fetch(conn, id)?;
     let mut record = record.lock().unwrap();
     let mut solid = record.solid();
     if !solid.solidate(solidate) {

@@ -65,25 +65,12 @@ fn perform(
   &pivot_id: &CalculateMessage,
 ) -> Result<()> {
   let weight = calculate_front(transaction_mapper, pivot_id)?;
-  let mut parents = VecDeque::new();
-  {
-    let transaction = transaction_mapper.fetch(conn, pivot_id)?;
-    let mut transaction = transaction.lock().unwrap();
-    if let Some(id_trunk) = transaction.id_trunk() {
-      parents.push_front(id_trunk);
-    }
-    if let Some(id_branch) = transaction.id_branch() {
-      parents.push_front(id_branch);
-    }
-    transaction.add_weight(weight);
-  }
   calculate_back(
     conn,
     transaction_mapper,
     calculation_limit,
     pivot_id,
-    weight + 1.0,
-    parents,
+    weight,
   )?;
   Ok(())
 }
@@ -139,10 +126,10 @@ fn calculate_back(
   transaction_mapper: &TransactionMapper,
   calculation_limit: usize,
   pivot_id: u64,
-  weight: f64,
-  mut nodes: VecDeque<u64>,
+  mut weight: f64,
 ) -> Result<()> {
-  let mut visited = HashSet::new();
+  let (mut nodes, mut visited) = (VecDeque::new(), HashSet::new());
+  nodes.push_front(pivot_id);
   while let Some(id) = nodes.pop_back() {
     if visited.len() > calculation_limit {
       return Ok(());
@@ -159,6 +146,9 @@ fn calculate_back(
       nodes.push_front(id_branch);
     }
     transaction.add_weight(weight);
+    if id == pivot_id {
+      weight += 1.0;
+    }
   }
   Ok(())
 }

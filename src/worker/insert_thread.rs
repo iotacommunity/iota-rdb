@@ -136,6 +136,8 @@ fn perform(
       solidate_genesis(branch_tx, null_hash);
       branch_tx.direct_approve();
       transaction_mapper.set_branch(current_tx, branch_tx.id_tx());
+    } else {
+      transaction_mapper.set_branch(current_tx, trunk_tx.id_tx());
     }
     set_id_address(conn, address_mapper, message, current_tx)?;
     set_id_bundle(conn, bundle_mapper, message, current_tx, timestamp)?;
@@ -242,15 +244,15 @@ fn set_solid(
   trunk_tx: &TransactionRecord,
   branch_tx: &Option<&mut TransactionRecord>,
 ) {
-  let (mut solid, mut branch_complete) = (message.solid(), false);
-  if trunk_tx.solid().is_complete() {
+  let mut solid = message.solid();
+  let mut is_complete = trunk_tx.solid().is_complete();
+  if is_complete {
     solid.solidate(Solidate::Trunk);
-    branch_complete = true;
   }
   if let Some(ref branch_tx) = *branch_tx {
-    branch_complete = branch_tx.solid().is_complete();
+    is_complete = branch_tx.solid().is_complete();
   }
-  if branch_complete {
+  if is_complete {
     solid.solidate(Solidate::Branch);
   }
   current_tx.set_solid(solid);
