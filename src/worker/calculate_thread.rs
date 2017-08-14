@@ -12,6 +12,7 @@ pub type CalculateMessage = u64;
 pub struct CalculateThread<'a> {
   pub calculate_rx: mpsc::Receiver<CalculateMessage>,
   pub mysql_uri: &'a str,
+  pub calculation_limit: usize,
   pub transaction_mapper: Arc<TransactionMapper>,
 }
 
@@ -20,6 +21,7 @@ impl<'a> CalculateThread<'a> {
     let Self {
       calculate_rx,
       mysql_uri,
+      calculation_limit,
       transaction_mapper,
     } = self;
     let mut conn =
@@ -30,7 +32,8 @@ impl<'a> CalculateThread<'a> {
         let message =
           calculate_rx.recv().expect("Thread communication failure");
         let duration = Instant::now();
-        let result = perform(&mut conn, transaction_mapper, &message);
+        let result =
+          perform(&mut conn, transaction_mapper, calculation_limit, &message);
         let duration = duration.elapsed().as_milliseconds();
         match result {
           Ok(()) => {
@@ -48,6 +51,7 @@ impl<'a> CalculateThread<'a> {
 fn perform(
   conn: &mut mysql::Conn,
   transaction_mapper: &TransactionMapper,
+  calculation_limit: usize,
   &pivot_id: &CalculateMessage,
 ) -> Result<()> {
   let weight = calculate_front(transaction_mapper, pivot_id)?;
@@ -63,7 +67,14 @@ fn perform(
     }
     transaction.add_weight(weight);
   }
-  calculate_back(conn, transaction_mapper, pivot_id, weight + 1.0, parents)?;
+  calculate_back(
+    conn,
+    transaction_mapper,
+    calculation_limit,
+    pivot_id,
+    weight + 1.0,
+    parents,
+  )?;
   Ok(())
 }
 
@@ -116,12 +127,16 @@ fn calculate_front_references(
 fn calculate_back(
   conn: &mut mysql::Conn,
   transaction_mapper: &TransactionMapper,
+  calculation_limit: usize,
   pivot_id: u64,
   weight: f64,
   mut nodes: VecDeque<u64>,
 ) -> Result<()> {
   let mut visited = HashSet::new();
   while let Some(id) = nodes.pop_back() {
+    if visited.len() > calculation_limit {
+      return Ok(());
+    }
     if id > pivot_id || !visited.insert(id) {
       continue;
     }

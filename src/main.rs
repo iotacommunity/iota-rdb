@@ -43,6 +43,7 @@ fn main() {
     update_interval,
     milestone_address,
     milestone_start_index,
+    calculation_limit,
     log_config,
   } = args;
   log4rs::init_file(log_config, Default::default()).unwrap_or_else(|err| {
@@ -108,6 +109,7 @@ fn main() {
   let calculate_thread = CalculateThread {
     calculate_rx,
     mysql_uri,
+    calculation_limit,
     transaction_mapper: transaction_mapper.clone(),
   };
   let zmq_loop = ZmqLoop { socket, insert_tx };

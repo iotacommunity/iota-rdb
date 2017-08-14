@@ -1,13 +1,15 @@
-# Scan this file for changes every 30 seconds
 refresh_rate: 30 seconds
 
 appenders:
-  # An appender named "stdout" that writes to stdout
   stdout:
     kind: console
+  file:
+    kind: file
+    path: iota-rdb.log
+    append: false
 
-# Set the default logging level to "info" and attach the "stdout" appender to the root
 root:
-  level: info
+  level: debug
   appenders:
     - stdout
+    - file

@@ -11,6 +11,7 @@ pub struct Args<'a> {
   pub update_interval: u64,
   pub milestone_address: &'a str,
   pub milestone_start_index: String,
+  pub calculation_limit: usize,
   pub log_config: &'a str,
 }
 
@@ -34,6 +35,11 @@ impl<'a> Args<'a> {
         .map_err(Error::MilestoneStartIndexParseInt)?,
       TAG_LENGTH,
     ).ok_or(Error::MilestoneStartIndexToTrits)?;
+    let calculation_limit = matches
+      .value_of("calculation_limit")
+      .ok_or(Error::ArgNotFound)?
+      .parse()
+      .map_err(Error::CalculationLimitParseInt)?;
     let log_config = matches.value_of("log_config").ok_or(Error::ArgNotFound)?;
 
     Ok(Self {
@@ -42,6 +48,7 @@ impl<'a> Args<'a> {
       update_interval,
       milestone_address,
       milestone_start_index,
+      calculation_limit,
       log_config,
     })
   }

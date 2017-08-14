@@ -5,6 +5,7 @@ const DEFAULT_MILESTONE_ADDRESS: &str =
   "KPWCHICGJZXKE9GSUDXZYUAPLHAKAHYHDXNPHENTE\
    RYMMBQOPSQIDENXKLKCEYCPVTZQLEEJVYJZV9BWU";
 const DEFAULT_MILESTONE_START_INDEX: &str = "62000";
+const DEFAULT_CALCULATION_LIMIT: &str = "1000";
 const DEFAULT_LOG_CONFIG: &str = "log4rs.yaml";
 
 pub fn build<'a, 'b>() -> App<'a, 'b> {
@@ -53,6 +54,15 @@ pub fn build<'a, 'b>() -> App<'a, 'b> {
         .value_name("INDEX")
         .default_value(DEFAULT_MILESTONE_START_INDEX)
         .help("Milestone start index"),
+    )
+    .arg(
+      Arg::with_name("calculation_limit")
+        .short("t")
+        .long("calculation-limit")
+        .takes_value(true)
+        .value_name("LIMIT")
+        .default_value(DEFAULT_CALCULATION_LIMIT)
+        .help("Calculation depth limit"),
     )
     .arg(
       Arg::with_name("log_config")

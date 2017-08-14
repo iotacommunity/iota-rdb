@@ -129,15 +129,14 @@ fn perform(
   let txs = unwrap_transactions(&mut txs, message);
   if let Some((mut current_tx, mut trunk_tx, mut branch_tx)) = txs {
     let timestamp = SystemTime::milliseconds_since_epoch()?;
-    let id_branch = map_branch(trunk_tx, &branch_tx, TransactionRecord::id_tx);
     solidate_genesis(trunk_tx, null_hash);
     trunk_tx.direct_approve();
+    transaction_mapper.set_trunk(current_tx, trunk_tx.id_tx());
     if let Some(ref mut branch_tx) = branch_tx {
       solidate_genesis(branch_tx, null_hash);
       branch_tx.direct_approve();
+      transaction_mapper.set_branch(current_tx, branch_tx.id_tx());
     }
-    transaction_mapper.set_trunk(current_tx, trunk_tx.id_tx());
-    transaction_mapper.set_branch(current_tx, id_branch);
     set_id_address(conn, address_mapper, message, current_tx)?;
     set_id_bundle(conn, bundle_mapper, message, current_tx, timestamp)?;
     set_solid(message, current_tx, trunk_tx, &branch_tx);
@@ -198,21 +197,6 @@ fn solidate_genesis(tx: &mut TransactionRecord, null_hash: &str) {
   }
 }
 
-fn map_branch<T, U>(
-  trunk_tx: &TransactionRecord,
-  branch_tx: &Option<&mut TransactionRecord>,
-  f: T,
-) -> U
-where
-  T: FnOnce(&TransactionRecord) -> U,
-{
-  if let Some(ref branch_tx) = *branch_tx {
-    f(branch_tx)
-  } else {
-    f(trunk_tx)
-  }
-}
-
 fn set_id_address(
   conn: &mut mysql::Conn,
   address_mapper: &AddressMapper,
@@ -257,11 +241,15 @@ fn set_solid(
   trunk_tx: &TransactionRecord,
   branch_tx: &Option<&mut TransactionRecord>,
 ) {
-  let mut solid = message.solid();
+  let (mut solid, mut branch_complete) = (message.solid(), false);
   if trunk_tx.solid().is_complete() {
     solid.solidate(Solidate::Trunk);
+    branch_complete = true;
   }
-  if map_branch(trunk_tx, branch_tx, TransactionRecord::solid).is_complete() {
+  if let Some(ref branch_tx) = *branch_tx {
+    branch_complete = branch_tx.solid().is_complete();
+  }
+  if branch_complete {
     solid.solidate(Solidate::Branch);
   }
   current_tx.set_solid(solid);
