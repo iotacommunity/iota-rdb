@@ -70,7 +70,6 @@ CREATE TABLE `tx` (
   `weight` double DEFAULT '0',
   `is_mst` char(1) DEFAULT '0',
   `mst_a` char(1) DEFAULT '0',
-  `attached` char(1) DEFAULT '0',
   `solid` char(1) DEFAULT '0',
   PRIMARY KEY (`id_tx`),
   UNIQUE KEY `hash_UNIQUE` (`hash`) USING BTREE,
