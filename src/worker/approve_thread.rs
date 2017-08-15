@@ -11,8 +11,8 @@ use utils::{DurationUtils, SystemTimeUtils};
 
 #[derive(Debug)]
 pub enum ApproveMessage {
-  Front(u64, u64, f64),
   Reverse(u64),
+  Front(u64, u64, f64),
 }
 
 pub struct ApproveThread<'a> {
@@ -39,6 +39,9 @@ impl<'a> ApproveThread<'a> {
         let message = approve_rx.recv().expect("Thread communication failure");
         let duration = Instant::now();
         let result = match message {
+          ApproveMessage::Reverse(id) => {
+            perform_reverse(&mut conn, transaction_mapper, bundle_mapper, id)
+          }
           ApproveMessage::Front(id_trunk, id_branch, mst_timestamp) => {
             perform_front(
               &mut conn,
@@ -48,9 +51,6 @@ impl<'a> ApproveThread<'a> {
               id_branch,
               mst_timestamp,
             )
-          }
-          ApproveMessage::Reverse(id) => {
-            perform_reverse(&mut conn, transaction_mapper, bundle_mapper, id)
           }
         };
         let duration = duration.elapsed().as_milliseconds();
@@ -65,6 +65,53 @@ impl<'a> ApproveThread<'a> {
       }
     });
   }
+}
+
+fn perform_reverse(
+  conn: &mut mysql::Conn,
+  transaction_mapper: &TransactionMapper,
+  bundle_mapper: &BundleMapper,
+  id: u64,
+) -> Result<()> {
+  let mut mst_timestamp = reference_approval(
+    conn,
+    transaction_mapper,
+    id,
+    TransactionMapper::trunk_references,
+  )?;
+  if mst_timestamp.is_none() {
+    mst_timestamp = reference_approval(
+      conn,
+      transaction_mapper,
+      id,
+      TransactionMapper::branch_references,
+    )?;
+  }
+  if let Some(mst_timestamp) = mst_timestamp {
+    let (id_trunk, id_branch) = {
+      let transaction = transaction_mapper.fetch(conn, id)?;
+      let mut transaction = transaction.lock().unwrap();
+      approve(
+        conn,
+        bundle_mapper,
+        &mut transaction,
+        mst_timestamp,
+        SystemTime::milliseconds_since_epoch()?,
+      )?;
+      (transaction.id_trunk(), transaction.id_branch())
+    };
+    if let (Some(id_trunk), Some(id_branch)) = (id_trunk, id_branch) {
+      perform_front(
+        conn,
+        transaction_mapper,
+        bundle_mapper,
+        id_trunk,
+        id_branch,
+        mst_timestamp,
+      )?;
+    }
+  }
+  Ok(())
 }
 
 fn perform_front(
@@ -107,40 +154,6 @@ fn perform_front(
   }
   if counter > 0 {
     event::subtangle_confirmation(conn, timestamp, counter)?;
-  }
-  Ok(())
-}
-
-fn perform_reverse(
-  conn: &mut mysql::Conn,
-  transaction_mapper: &TransactionMapper,
-  bundle_mapper: &BundleMapper,
-  id: u64,
-) -> Result<()> {
-  let mut mst_timestamp = reference_approval(
-    conn,
-    transaction_mapper,
-    id,
-    TransactionMapper::trunk_references,
-  )?;
-  if mst_timestamp.is_none() {
-    mst_timestamp = reference_approval(
-      conn,
-      transaction_mapper,
-      id,
-      TransactionMapper::branch_references,
-    )?;
-  }
-  if let Some(mst_timestamp) = mst_timestamp {
-    let transaction = transaction_mapper.fetch(conn, id)?;
-    let mut transaction = transaction.lock().unwrap();
-    approve(
-      conn,
-      bundle_mapper,
-      &mut transaction,
-      mst_timestamp,
-      SystemTime::milliseconds_since_epoch()?,
-    )?;
   }
   Ok(())
 }

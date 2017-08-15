@@ -291,14 +291,14 @@ fn set_approve_data(
   current_tx: &TransactionRecord,
 ) {
   if current_tx.mst_a() {
-    if let Some(id_trunk) = current_tx.id_trunk() {
-      if let Some(id_branch) = current_tx.id_branch() {
-        *approve_data = Some(ApproveMessage::Front(
-          id_trunk,
-          id_branch,
-          current_tx.mst_timestamp(),
-        ));
-      }
+    if let (Some(id_trunk), Some(id_branch)) =
+      (current_tx.id_trunk(), current_tx.id_branch())
+    {
+      *approve_data = Some(ApproveMessage::Front(
+        id_trunk,
+        id_branch,
+        current_tx.mst_timestamp(),
+      ));
     }
   } else {
     *approve_data = Some(ApproveMessage::Reverse(current_tx.id_tx()));
