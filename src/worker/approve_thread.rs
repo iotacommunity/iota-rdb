@@ -11,7 +11,7 @@ use utils::{DurationUtils, SystemTimeUtils};
 
 #[derive(Debug)]
 pub enum ApproveMessage {
-  Front(u64, u64),
+  Front(u64, u64, f64),
   Reverse(u64),
 }
 
@@ -39,13 +39,16 @@ impl<'a> ApproveThread<'a> {
         let message = approve_rx.recv().expect("Thread communication failure");
         let duration = Instant::now();
         let result = match message {
-          ApproveMessage::Front(id_trunk, id_branch) => perform_front(
-            &mut conn,
-            transaction_mapper,
-            bundle_mapper,
-            id_trunk,
-            id_branch,
-          ),
+          ApproveMessage::Front(id_trunk, id_branch, mst_timestamp) => {
+            perform_front(
+              &mut conn,
+              transaction_mapper,
+              bundle_mapper,
+              id_trunk,
+              id_branch,
+              mst_timestamp,
+            )
+          }
           ApproveMessage::Reverse(id) => {
             perform_reverse(&mut conn, transaction_mapper, bundle_mapper, id)
           }
@@ -70,6 +73,7 @@ fn perform_front(
   bundle_mapper: &BundleMapper,
   id_trunk: u64,
   id_branch: u64,
+  mst_timestamp: f64,
 ) -> Result<()> {
   let (timestamp, mut counter) = (SystemTime::milliseconds_since_epoch()?, 0);
   let (mut nodes, mut visited) = (VecDeque::new(), HashSet::new());
@@ -92,7 +96,13 @@ fn perform_front(
     if let Some(id_branch) = transaction.id_branch() {
       nodes.push_front(id_branch);
     }
-    approve(conn, bundle_mapper, &mut transaction, timestamp)?;
+    approve(
+      conn,
+      bundle_mapper,
+      &mut transaction,
+      mst_timestamp,
+      timestamp,
+    )?;
     counter += 1;
   }
   if counter > 0 {
@@ -107,49 +117,69 @@ fn perform_reverse(
   bundle_mapper: &BundleMapper,
   id: u64,
 ) -> Result<()> {
-  let (timestamp, mut is_approved) =
-    (SystemTime::milliseconds_since_epoch()?, false);
-  if let Some(references) = transaction_mapper.trunk_references(id) {
-    is_approved = is_approved ||
-      is_reference_approved(conn, transaction_mapper, &references)?
+  let mut mst_timestamp = reference_approval(
+    conn,
+    transaction_mapper,
+    id,
+    TransactionMapper::trunk_references,
+  )?;
+  if mst_timestamp.is_none() {
+    mst_timestamp = reference_approval(
+      conn,
+      transaction_mapper,
+      id,
+      TransactionMapper::branch_references,
+    )?;
   }
-  if let Some(references) = transaction_mapper.branch_references(id) {
-    is_approved = is_approved ||
-      is_reference_approved(conn, transaction_mapper, &references)?
-  }
-  if is_approved {
+  if let Some(mst_timestamp) = mst_timestamp {
     let transaction = transaction_mapper.fetch(conn, id)?;
     let mut transaction = transaction.lock().unwrap();
-    approve(conn, bundle_mapper, &mut transaction, timestamp)?;
+    approve(
+      conn,
+      bundle_mapper,
+      &mut transaction,
+      mst_timestamp,
+      SystemTime::milliseconds_since_epoch()?,
+    )?;
   }
   Ok(())
 }
 
-fn is_reference_approved(
+fn reference_approval<T>(
   conn: &mut mysql::Conn,
   transaction_mapper: &TransactionMapper,
-  references: &Mutex<Vec<u64>>,
-) -> Result<bool> {
-  for &id in &*references.lock().unwrap() {
-    let record = transaction_mapper.fetch(conn, id)?;
-    let record = record.lock().unwrap();
-    if record.mst_a() {
-      return Ok(true);
+  id: u64,
+  f: T,
+) -> Result<Option<f64>>
+where
+  T: FnOnce(&TransactionMapper, u64)
+    -> Option<Arc<Mutex<Vec<u64>>>>,
+{
+  if let Some(references) = f(transaction_mapper, id) {
+    for &id in &*references.lock().unwrap() {
+      let record = transaction_mapper.fetch(conn, id)?;
+      let record = record.lock().unwrap();
+      if record.mst_a() {
+        return Ok(Some(record.mst_timestamp()));
+      }
     }
   }
-  Ok(false)
+  Ok(None)
 }
 
 fn approve(
   conn: &mut mysql::Conn,
   bundle_mapper: &BundleMapper,
   transaction: &mut TransactionRecord,
+  mst_timestamp: f64,
   timestamp: f64,
 ) -> Result<()> {
   if transaction.current_idx() == 0 {
     let bundle = bundle_mapper.fetch(conn, transaction.id_bundle())?;
     bundle.lock().unwrap().set_confirmed(timestamp);
   }
+  let timestamp = transaction.timestamp();
+  transaction.set_conftime(timestamp - mst_timestamp);
   transaction.set_mst_a(true);
   Ok(())
 }

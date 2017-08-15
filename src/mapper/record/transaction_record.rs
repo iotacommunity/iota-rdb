@@ -17,6 +17,7 @@ pub struct TransactionRecord {
   value: i64,
   timestamp: f64,
   arrival: f64,
+  conftime: f64,
   current_idx: i32,
   last_idx: i32,
   da: i32,
@@ -39,6 +40,7 @@ const SELECT_QUERY: &str = r#"
     value,
     timestamp,
     arrival,
+    conftime,
     current_idx,
     last_idx,
     da,
@@ -73,6 +75,7 @@ impl Record for TransactionRecord {
       value,
       timestamp,
       arrival,
+      conftime,
       current_idx,
       last_idx,
       da,
@@ -92,6 +95,7 @@ impl Record for TransactionRecord {
       :value,
       :timestamp,
       :arrival,
+      :conftime,
       :current_idx,
       :last_idx,
       :da,
@@ -111,6 +115,7 @@ impl Record for TransactionRecord {
       value = :value,
       timestamp = :timestamp,
       arrival = :arrival,
+      conftime = :conftime,
       current_idx = :current_idx,
       last_idx = :last_idx,
       da = :da,
@@ -137,6 +142,7 @@ impl Record for TransactionRecord {
       value: row.take_opt("value").unwrap_or_else(|| Ok(0))?,
       timestamp: row.take_opt("timestamp").unwrap_or_else(|| Ok(0.0))?,
       arrival: row.take_opt("arrival").unwrap_or_else(|| Ok(0.0))?,
+      conftime: row.take_opt("conftime").unwrap_or_else(|| Ok(0.0))?,
       current_idx: row.take_opt("current_idx").unwrap_or_else(|| Ok(0))?,
       last_idx: row.take_opt("last_idx").unwrap_or_else(|| Ok(0))?,
       da: row.take_opt("da").unwrap_or_else(|| Ok(0))?,
@@ -160,6 +166,7 @@ impl Record for TransactionRecord {
       "value" => self.value,
       "timestamp" => self.timestamp,
       "arrival" => self.arrival,
+      "conftime" => self.conftime,
       "current_idx" => self.current_idx,
       "last_idx" => self.last_idx,
       "da" => self.da,
@@ -193,6 +200,7 @@ impl TransactionRecord {
   impl_accessors!(value, set_value, i64);
   impl_accessors!(timestamp, set_timestamp, f64);
   impl_accessors!(arrival, set_arrival, f64);
+  impl_accessors!(conftime, set_conftime, f64);
   impl_accessors!(current_idx, set_current_idx, i32);
   impl_accessors!(last_idx, set_last_idx, i32);
   impl_accessors!(da, set_da, i32);
@@ -217,6 +225,7 @@ impl TransactionRecord {
       value: 0,
       timestamp: 0.0,
       arrival: 0.0,
+      conftime: 0.0,
       current_idx: 0,
       last_idx: 0,
       da: 0,
@@ -254,6 +263,10 @@ impl TransactionRecord {
       }
     }
     Ok(results)
+  }
+
+  pub fn mst_timestamp(&self) -> f64 {
+    self.timestamp - self.conftime
   }
 
   pub fn direct_approve(&mut self) {
