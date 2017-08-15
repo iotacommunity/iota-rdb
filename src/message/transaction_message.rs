@@ -37,7 +37,7 @@ impl TransactionMessage {
     let bundle_hash = chunks[8].to_owned();
     let trunk_hash = chunks[9].to_owned();
     let branch_hash = chunks[10].to_owned();
-    let arrival = chunks[11].parse()?;
+    let arrival = normalize_timestamp(chunks[11].parse()?);
     let is_milestone = address_hash == milestone_address;
     let solid = if is_milestone && tag == milestone_start_index {
       Solid::Complete
@@ -74,4 +74,12 @@ impl TransactionMessage {
   impl_getter!(arrival, f64);
   impl_getter!(is_milestone, bool);
   impl_getter!(solid, Solid);
+}
+
+fn normalize_timestamp(mut timestamp: f64) -> f64 {
+  const THRESHOLD: f64 = 1_262_304_000_000.0; // 01.01.2010 in milliseconds
+  if timestamp > THRESHOLD {
+    timestamp /= 1000.0;
+  }
+  timestamp
 }
