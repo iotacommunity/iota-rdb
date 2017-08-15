@@ -266,7 +266,7 @@ impl TransactionRecord {
   }
 
   pub fn mst_timestamp(&self) -> f64 {
-    self.timestamp - self.conftime
+    self.timestamp + self.conftime
   }
 
   pub fn direct_approve(&mut self) {

@@ -179,7 +179,7 @@ fn approve(
     bundle.lock().unwrap().set_confirmed(timestamp);
   }
   let timestamp = transaction.timestamp();
-  transaction.set_conftime(timestamp - mst_timestamp);
+  transaction.set_conftime(mst_timestamp - timestamp);
   transaction.set_mst_a(true);
   Ok(())
 }
