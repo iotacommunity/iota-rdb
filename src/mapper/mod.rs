@@ -123,12 +123,10 @@ pub trait Mapper<'a>: Sized {
     let mut indices = self.indices();
     let init_len = records.len();
     let garbage = records.values().cloned().collect::<Vec<_>>();
-    for record in garbage {
-      if Arc::strong_count(&record) > 2 {
-        continue;
-      }
-      let record = record.lock().unwrap();
-      if record.is_persisted() && !record.is_modified() &&
+    for reference in garbage {
+      let record = reference.lock().unwrap();
+      if Arc::strong_count(&reference) == 2 && record.is_persisted() &&
+        !record.is_modified() &&
         record.generation() > generation_limit
       {
         records.remove(&record.id());
