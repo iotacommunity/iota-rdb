@@ -11,7 +11,7 @@ pub use self::record::{AddressRecord, BundleRecord, Record, TransactionRecord};
 pub use self::transaction_mapper::TransactionMapper;
 
 use mysql;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex, RwLock};
 
 pub trait Mapper<'a>: Sized {
@@ -22,13 +22,15 @@ pub trait Mapper<'a>: Sized {
 
   fn counter(&self) -> &Mutex<u64>;
 
-  fn records(&self) -> &RwLock<HashMap<u64, Arc<Mutex<Self::Record>>>>;
+  fn records(&self) -> &RwLock<BTreeMap<u64, Arc<Mutex<Self::Record>>>>;
 
   fn hashes(&self) -> &RwLock<HashMap<String, u64>>;
 
   fn indices(&'a self) -> Self::Indices;
 
   fn store_indices(indices: &mut Self::Indices, record: &Self::Record);
+
+  fn remove_indices(indices: &mut Self::Indices, record: &Self::Record);
 
   fn init_counter(
     conn: &mut mysql::Conn,
@@ -64,40 +66,33 @@ pub trait Mapper<'a>: Sized {
         let mut records = self.records().write().unwrap();
         let mut hashes = self.hashes().write().unwrap();
         let mut indices = self.indices();
-        Self::store(&mut records, &mut hashes, &mut indices, record)
-          .1
-          .clone()
+        Self::store(&mut records, &mut hashes, &mut indices, record).1
       })
     })
   }
 
-  fn fetch_or_insert<T>(
+  fn fetch_by_hash<T>(
     &'a self,
     conn: &mut mysql::Conn,
     hash: &str,
     f: T,
-  ) -> Result<u64>
+  ) -> Result<Arc<Mutex<Self::Record>>>
   where
     T: FnOnce(u64) -> Result<Self::Record>,
   {
     let cached = {
+      let records = self.records().read().unwrap();
       let hashes = self.hashes().read().unwrap();
-      hashes.get(hash).cloned()
+      hashes.get(hash).and_then(|id| records.get(id)).cloned()
     };
     cached.map(Ok).unwrap_or_else(|| {
       Self::Record::find_by_hash(conn, hash).and_then(|record| {
-        record
-          .map(Ok)
-          .unwrap_or_else(|| {
-            f(self.next_id())
-              .and_then(|mut record| record.insert(conn).map(|_| record))
-          })
-          .map(|record| {
-            let mut records = self.records().write().unwrap();
-            let mut hashes = self.hashes().write().unwrap();
-            let mut indices = self.indices();
-            Self::store(&mut records, &mut hashes, &mut indices, record).0
-          })
+        let mut records = self.records().write().unwrap();
+        let mut hashes = self.hashes().write().unwrap();
+        let mut indices = self.indices();
+        record.map_or_else(|| f(self.next_id()), Ok).map(|record| {
+          Self::store(&mut records, &mut hashes, &mut indices, record).1
+        })
       })
     })
   }
@@ -122,30 +117,40 @@ pub trait Mapper<'a>: Sized {
     Ok(counter)
   }
 
-  fn collect_garbage(&self, generation_limit: usize) -> usize {
+  fn collect_garbage(&'a self, generation_limit: usize) -> usize {
     let mut records = self.records().write().unwrap();
+    let mut hashes = self.hashes().write().unwrap();
+    let mut indices = self.indices();
     let init_len = records.len();
-    records.retain(|_, reference| {
-      let record = reference.lock().unwrap();
-      !record.is_persisted() || record.is_modified() ||
-        record.generation() <= generation_limit ||
-        Arc::strong_count(reference) > 1
-    });
+    let garbage = records.values().cloned().collect::<Vec<_>>();
+    for record in garbage {
+      if Arc::strong_count(&record) > 2 {
+        continue;
+      }
+      let record = record.lock().unwrap();
+      if record.is_persisted() && !record.is_modified() &&
+        record.generation() > generation_limit
+      {
+        records.remove(&record.id());
+        hashes.remove(record.hash());
+        Self::remove_indices(&mut indices, &record);
+      }
+    }
     init_len - records.len()
   }
 
-  fn store<'b>(
-    records: &'b mut HashMap<u64, Arc<Mutex<Self::Record>>>,
+  fn store(
+    records: &mut BTreeMap<u64, Arc<Mutex<Self::Record>>>,
     hashes: &mut HashMap<String, u64>,
     indices: &mut Self::Indices,
     record: Self::Record,
-  ) -> (u64, &'b Arc<Mutex<Self::Record>>) {
+  ) -> (u64, Arc<Mutex<Self::Record>>) {
     let id = record.id();
     let record = records.entry(id).or_insert_with(|| {
       hashes.insert(record.hash().to_owned(), id);
       Self::store_indices(indices, &record);
       Arc::new(Mutex::new(record))
     });
-    (id, record)
+    (id, record.clone())
   }
 }

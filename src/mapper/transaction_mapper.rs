@@ -1,10 +1,10 @@
 use super::{Mapper, Record, Result, TransactionRecord};
 use mysql;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::hash::Hash;
 use std::sync::{Arc, Mutex, RwLock, RwLockWriteGuard};
 
-type Records = RwLock<HashMap<u64, Arc<Mutex<TransactionRecord>>>>;
+type Records = RwLock<BTreeMap<u64, Arc<Mutex<TransactionRecord>>>>;
 type Hashes = RwLock<HashMap<String, u64>>;
 type Index<K, V> = HashMap<K, Arc<Mutex<Vec<V>>>>;
 type IndexGuard<'a, K, V> = RwLockWriteGuard<'a, Index<K, V>>;
@@ -26,7 +26,7 @@ impl<'a> Mapper<'a> for TransactionMapper {
       conn,
       r"SELECT id_tx FROM tx ORDER BY id_tx DESC LIMIT 1",
     )?;
-    let records = RwLock::new(HashMap::new());
+    let records = RwLock::new(BTreeMap::new());
     let hashes = RwLock::new(HashMap::new());
     let trunks = RwLock::new(HashMap::new());
     let branches = RwLock::new(HashMap::new());
@@ -52,7 +52,9 @@ impl<'a> Mapper<'a> for TransactionMapper {
   }
 
   fn indices(&'a self) -> Self::Indices {
-    (self.trunks.write().unwrap(), self.branches.write().unwrap())
+    let trunks = self.trunks.write().unwrap();
+    let branches = self.branches.write().unwrap();
+    (trunks, branches)
   }
 
   fn store_indices(
@@ -64,6 +66,18 @@ impl<'a> Mapper<'a> for TransactionMapper {
     }
     if let Some(id_branch) = record.id_branch() {
       store_index(branches, id_branch, record.id());
+    }
+  }
+
+  fn remove_indices(
+    &mut (ref mut trunks, ref mut branches): &mut Self::Indices,
+    record: &TransactionRecord,
+  ) {
+    if let Some(id_trunk) = record.id_trunk() {
+      remove_index(trunks, &id_trunk, &record.id());
+    }
+    if let Some(id_branch) = record.id_branch() {
+      remove_index(branches, &id_branch, &record.id());
     }
   }
 }
@@ -99,9 +113,7 @@ impl TransactionMapper {
               .unwrap_or_else(|| {
                 TransactionRecord::placeholder(hash.to_owned(), self.next_id())
               });
-            let (id_tx, record) =
-              Self::store(&mut records, &mut hashes, &mut indices, record);
-            (id_tx, record.clone())
+            Self::store(&mut records, &mut hashes, &mut indices, record)
           })
       })
       .collect::<Vec<_>>();
@@ -149,10 +161,29 @@ where
 {
   let vec = index
     .entry(key)
-    .or_insert_with(|| Arc::new(Mutex::new(Vec::new())))
-    .clone();
+    .or_insert_with(|| Arc::new(Mutex::new(Vec::new())));
   let mut vec = vec.lock().unwrap();
   if let Err(i) = vec.binary_search(&value) {
-    vec.insert(i, value)
+    vec.insert(i, value);
+  }
+}
+
+fn remove_index<K, V>(index: &mut IndexGuard<K, V>, key: &K, value: &V)
+where
+  K: Eq + Hash,
+  V: Ord,
+{
+  let mut remove = false;
+  if let Some(vec) = index.get(key) {
+    let mut vec = vec.lock().unwrap();
+    if let Ok(i) = vec.binary_search(value) {
+      vec.remove(i);
+      if vec.is_empty() {
+        remove = true;
+      }
+    }
+  }
+  if remove {
+    index.remove(key);
   }
 }

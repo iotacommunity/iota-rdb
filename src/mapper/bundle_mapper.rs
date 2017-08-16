@@ -1,9 +1,9 @@
 use super::{BundleRecord, Mapper, Result};
 use mysql;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex, RwLock};
 
-type Records = RwLock<HashMap<u64, Arc<Mutex<BundleRecord>>>>;
+type Records = RwLock<BTreeMap<u64, Arc<Mutex<BundleRecord>>>>;
 type Hashes = RwLock<HashMap<String, u64>>;
 
 pub struct BundleMapper {
@@ -21,7 +21,7 @@ impl<'a> Mapper<'a> for BundleMapper {
       conn,
       r"SELECT id_bundle FROM bundle ORDER BY id_bundle DESC LIMIT 1",
     )?;
-    let records = RwLock::new(HashMap::new());
+    let records = RwLock::new(BTreeMap::new());
     let hashes = RwLock::new(HashMap::new());
     Ok(Self {
       counter,
@@ -45,4 +45,6 @@ impl<'a> Mapper<'a> for BundleMapper {
   fn indices(&self) {}
 
   fn store_indices(_indices: &mut (), _record: &BundleRecord) {}
+
+  fn remove_indices(_indices: &mut (), _record: &BundleRecord) {}
 }

@@ -206,13 +206,18 @@ fn set_id_address(
   message: &TransactionMessage,
   current_tx: &mut TransactionRecord,
 ) -> Result<()> {
-  current_tx.set_id_address(address_mapper.fetch_or_insert(
+  let address = address_mapper.fetch_by_hash(
     conn,
     message.address_hash(),
     |id_address| {
       AddressRecord::new(id_address, message.address_hash().to_owned())
     },
-  )?);
+  )?;
+  let mut address = address.lock().unwrap();
+  if !address.is_persisted() {
+    address.insert(conn)?;
+  }
+  current_tx.set_id_address(address.id_address());
   Ok(())
 }
 
@@ -223,7 +228,7 @@ fn set_id_bundle(
   current_tx: &mut TransactionRecord,
   timestamp: f64,
 ) -> Result<()> {
-  current_tx.set_id_bundle(bundle_mapper.fetch_or_insert(
+  let bundle = bundle_mapper.fetch_by_hash(
     conn,
     message.bundle_hash(),
     |id_bundle| {
@@ -234,7 +239,12 @@ fn set_id_bundle(
         timestamp,
       ))
     },
-  )?);
+  )?;
+  let mut bundle = bundle.lock().unwrap();
+  if !bundle.is_persisted() {
+    bundle.insert(conn)?;
+  }
+  current_tx.set_id_bundle(bundle.id_bundle());
   Ok(())
 }
 

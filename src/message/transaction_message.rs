@@ -76,10 +76,11 @@ impl TransactionMessage {
   impl_getter!(solid, Solid);
 }
 
-fn normalize_timestamp(mut timestamp: f64) -> f64 {
+fn normalize_timestamp(timestamp: f64) -> f64 {
   const THRESHOLD: f64 = 1_262_304_000_000.0; // 01.01.2010 in milliseconds
   if timestamp > THRESHOLD {
-    timestamp /= 1000.0;
+    (timestamp / 1000.0).floor()
+  } else {
+    timestamp
   }
-  timestamp
 }

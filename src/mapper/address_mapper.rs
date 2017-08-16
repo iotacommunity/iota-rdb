@@ -1,9 +1,9 @@
 use super::{AddressRecord, Mapper, Result};
 use mysql;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex, RwLock};
 
-type Records = RwLock<HashMap<u64, Arc<Mutex<AddressRecord>>>>;
+type Records = RwLock<BTreeMap<u64, Arc<Mutex<AddressRecord>>>>;
 type Hashes = RwLock<HashMap<String, u64>>;
 
 pub struct AddressMapper {
@@ -21,7 +21,7 @@ impl<'a> Mapper<'a> for AddressMapper {
       conn,
       r"SELECT id_address FROM address ORDER BY id_address DESC LIMIT 1",
     )?;
-    let records = RwLock::new(HashMap::new());
+    let records = RwLock::new(BTreeMap::new());
     let hashes = RwLock::new(HashMap::new());
     Ok(Self {
       counter,
@@ -45,4 +45,6 @@ impl<'a> Mapper<'a> for AddressMapper {
   fn indices(&self) {}
 
   fn store_indices(_indices: &mut (), _record: &AddressRecord) {}
+
+  fn remove_indices(_indices: &mut (), _record: &AddressRecord) {}
 }
