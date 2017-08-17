@@ -1,8 +1,6 @@
 refresh_rate: 30 seconds
 
 appenders:
-  stdout:
-    kind: console
   file:
     kind: file
     path: iota-rdb.log
@@ -11,5 +9,4 @@ appenders:
 root:
   level: debug
   appenders:
-    - stdout
     - file
