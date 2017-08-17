@@ -1,7 +1,6 @@
 use super::Result;
 use event;
-use mapper::{BundleMapper, Mapper, Record, TransactionMapper,
-             TransactionRecord};
+use mapper::{BundleMapper, Mapper, TransactionMapper, TransactionRecord};
 use mysql;
 use std::collections::{HashSet, VecDeque};
 use std::sync::{mpsc, Arc, Mutex};
@@ -134,8 +133,8 @@ fn perform_front(
     }
     let transaction = transaction_mapper.fetch(conn, id)?;
     let mut transaction = transaction.lock().unwrap();
-    if transaction.mst_a() || !transaction.is_persisted() {
-      return Ok(());
+    if transaction.mst_a() {
+      continue;
     }
     if let Some(id_trunk) = transaction.id_trunk() {
       nodes.push_front(id_trunk);

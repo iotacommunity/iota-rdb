@@ -88,11 +88,23 @@ impl TransactionMapper {
     conn: &mut mysql::Conn,
     input: Vec<&str>,
   ) -> Result<Vec<Arc<Mutex<TransactionRecord>>>> {
-    let mut missing = input.clone();
-    {
+    let cached = {
+      let records = self.records.read().unwrap();
       let hashes = self.hashes.read().unwrap();
-      missing.retain(|hash| hashes.contains_key(*hash));
-    }
+      input
+        .iter()
+        .filter_map(|&hash| {
+          hashes
+            .get(hash)
+            .and_then(|&id| records.get(&id).map(|x| (hash, (id, x.clone()))))
+        })
+        .collect::<HashMap<_, _>>()
+    };
+    let missing = input
+      .iter()
+      .filter(|&hash| !cached.contains_key(hash))
+      .cloned()
+      .collect::<Vec<_>>();
     let found = TransactionRecord::find_by_hashes(conn, &missing)?;
     let mut records = self.records.write().unwrap();
     let mut hashes = self.hashes.write().unwrap();
@@ -100,21 +112,26 @@ impl TransactionMapper {
     let mut output = input
       .into_iter()
       .map(|hash| {
-        hashes
-          .get(hash)
-          .and_then(|id_tx| {
-            records.get(id_tx).cloned().map(|record| (*id_tx, record))
-          })
-          .unwrap_or_else(|| {
-            let record = found
-              .iter()
-              .find(|record| record.hash() == hash)
-              .cloned()
-              .unwrap_or_else(|| {
-                TransactionRecord::placeholder(hash.to_owned(), self.next_id())
-              });
-            Self::store(&mut records, &mut hashes, &mut indices, record)
-          })
+        cached.get(hash).cloned().unwrap_or_else(|| {
+          hashes
+            .get(hash)
+            .and_then(|&id_tx| {
+              records.get(&id_tx).map(|record| (id_tx, record.clone()))
+            })
+            .unwrap_or_else(|| {
+              let record = found
+                .iter()
+                .find(|record| record.hash() == hash)
+                .cloned()
+                .unwrap_or_else(|| {
+                  TransactionRecord::placeholder(
+                    hash.to_owned(),
+                    self.next_id(),
+                  )
+                });
+              Self::store(&mut records, &mut hashes, &mut indices, record)
+            })
+        })
       })
       .collect::<Vec<_>>();
     output.sort_unstable_by_key(|&(id_tx, _)| id_tx);
