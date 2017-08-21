@@ -81,6 +81,38 @@ impl Mapper for TransactionMapper {
 }
 
 impl TransactionMapper {
+  pub fn set_id_trunk(
+    indices: &mut [RwLockWriteGuard<Records<Index>>],
+    record: &mut TransactionRecord,
+    id_trunk: u64,
+  ) {
+    match record.id_trunk() {
+      Some(_) => panic!("`id_trunk` is immutable"),
+      None => {
+        if let Some(index) = indices[0].get(&id_trunk) {
+          insert_ref(index, record.id());
+        }
+        record.set_id_trunk(Some(id_trunk));
+      }
+    }
+  }
+
+  pub fn set_id_branch(
+    indices: &mut [RwLockWriteGuard<Records<Index>>],
+    record: &mut TransactionRecord,
+    id_branch: u64,
+  ) {
+    match record.id_branch() {
+      Some(_) => panic!("`id_branch` is immutable"),
+      None => {
+        if let Some(index) = indices[1].get(&id_branch) {
+          insert_ref(index, record.id());
+        }
+        record.set_id_branch(Some(id_branch));
+      }
+    }
+  }
+
   pub fn fetch_many(
     &self,
     conn: &mut mysql::Conn,
@@ -147,36 +179,6 @@ impl TransactionMapper {
       .collect::<Vec<_>>();
     output.sort_unstable_by_key(|&(id_tx, _)| id_tx);
     Ok(output.into_iter().map(|(_, record)| record).collect())
-  }
-
-  pub fn set_trunk(&self, record: &mut TransactionRecord, id_trunk: u64) {
-    match record.id_trunk() {
-      Some(_) => panic!("`id_trunk` is immutable"),
-      None => {
-        debug!("Mutex check at line {}", line!());
-        let trunks = self.indices[0].read().unwrap();
-        debug!("Mutex check at line {}", line!());
-        if let Some(index) = trunks.get(&id_trunk) {
-          insert_ref(index, record.id());
-        }
-        record.set_id_trunk(Some(id_trunk));
-      }
-    }
-  }
-
-  pub fn set_branch(&self, record: &mut TransactionRecord, id_branch: u64) {
-    match record.id_branch() {
-      Some(_) => panic!("`id_branch` is immutable"),
-      None => {
-        debug!("Mutex check at line {}", line!());
-        let branches = self.indices[1].read().unwrap();
-        debug!("Mutex check at line {}", line!());
-        if let Some(index) = branches.get(&id_branch) {
-          insert_ref(index, record.id());
-        }
-        record.set_id_branch(Some(id_branch));
-      }
-    }
   }
 
   pub fn trunk_index(&self, id: u64) -> Option<Arc<Mutex<Option<Vec<u64>>>>> {

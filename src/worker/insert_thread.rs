@@ -123,18 +123,28 @@ fn perform(
     vec![message.trunk_hash(), message.branch_hash(), message.hash()],
   )?;
   debug!("Mutex check at line {}", line!());
+  let mut indices = transaction_mapper.lock_indices();
+  debug!("Mutex check at line {}", line!());
   let mut txs = txs.iter().map(|tx| tx.lock().unwrap()).collect();
   debug!("Mutex check at line {}", line!());
   let txs = unwrap_transactions(null_hash, message, &mut txs);
   if let Some((mut current_tx, mut trunk_tx, mut branch_tx)) = txs {
     let timestamp = SystemTime::milliseconds_since_epoch()?;
     process_parent(conn, null_hash, trunk_tx)?;
-    transaction_mapper.set_trunk(current_tx, trunk_tx.id_tx());
+    TransactionMapper::set_id_trunk(&mut indices, current_tx, trunk_tx.id_tx());
     if let Some(ref mut branch_tx) = branch_tx {
       process_parent(conn, null_hash, branch_tx)?;
-      transaction_mapper.set_branch(current_tx, branch_tx.id_tx());
+      TransactionMapper::set_id_branch(
+        &mut indices,
+        current_tx,
+        branch_tx.id_tx(),
+      );
     } else {
-      transaction_mapper.set_branch(current_tx, trunk_tx.id_tx());
+      TransactionMapper::set_id_branch(
+        &mut indices,
+        current_tx,
+        trunk_tx.id_tx(),
+      );
     }
     set_id_address(conn, address_mapper, message, current_tx)?;
     set_id_bundle(conn, bundle_mapper, message, current_tx, timestamp)?;
