@@ -37,7 +37,9 @@ impl<'a> CalculateThreads<'a> {
         let calculate_rx = &*calculate_rx;
         loop {
           let message = {
+            debug!("Mutex check at line {}", line!());
             let rx = calculate_rx.lock().unwrap();
+            debug!("Mutex check at line {}", line!());
             rx.recv().expect("Thread communication failure")
           };
           let duration = Instant::now();
@@ -64,7 +66,7 @@ fn perform(
   calculation_limit: usize,
   &pivot_id: &CalculateMessage,
 ) -> Result<()> {
-  let weight = calculate_front(transaction_mapper, pivot_id)?;
+  let weight = calculate_front(conn, transaction_mapper, pivot_id)?;
   calculate_back(
     conn,
     transaction_mapper,
@@ -76,6 +78,7 @@ fn perform(
 }
 
 fn calculate_front(
+  conn: &mut mysql::Conn,
   transaction_mapper: &TransactionMapper,
   pivot_id: u64,
 ) -> Result<f64> {
@@ -83,36 +86,44 @@ fn calculate_front(
   let mut weight = 0.0;
   nodes.push_front(pivot_id);
   while let Some(id) = nodes.pop_back() {
-    if let Some(references) = transaction_mapper.trunk_references(id) {
-      calculate_front_references(
-        &mut nodes,
-        &mut visited,
-        &mut weight,
-        &references,
-        pivot_id,
-      );
+    if let Some(index) = transaction_mapper.trunk_index(id) {
+      if let Some(ref index) =
+        *transaction_mapper.fetch_trunk(conn, id, &index)?
+      {
+        calculate_front_refs(
+          &mut nodes,
+          &mut visited,
+          &mut weight,
+          index,
+          pivot_id,
+        );
+      }
     }
-    if let Some(references) = transaction_mapper.branch_references(id) {
-      calculate_front_references(
-        &mut nodes,
-        &mut visited,
-        &mut weight,
-        &references,
-        pivot_id,
-      );
+    if let Some(index) = transaction_mapper.branch_index(id) {
+      if let Some(ref index) =
+        *transaction_mapper.fetch_branch(conn, id, &index)?
+      {
+        calculate_front_refs(
+          &mut nodes,
+          &mut visited,
+          &mut weight,
+          index,
+          pivot_id,
+        );
+      }
     }
   }
   Ok(weight)
 }
 
-fn calculate_front_references(
+fn calculate_front_refs(
   nodes: &mut VecDeque<u64>,
   visited: &mut HashSet<u64>,
   weight: &mut f64,
-  references: &Mutex<Vec<u64>>,
+  index: &[u64],
   pivot_id: u64,
 ) {
-  for &id in &*references.lock().unwrap() {
+  for &id in index {
     if id > pivot_id || !visited.insert(id) {
       continue;
     }
@@ -138,7 +149,9 @@ fn calculate_back(
       continue;
     }
     let transaction = transaction_mapper.fetch(conn, id)?;
+    debug!("Mutex check at line {}", line!());
     let mut transaction = transaction.lock().unwrap();
+    debug!("Mutex check at line {}", line!());
     if let Some(id_trunk) = transaction.id_trunk() {
       nodes.push_front(id_trunk);
     }

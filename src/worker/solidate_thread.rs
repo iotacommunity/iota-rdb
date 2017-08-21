@@ -4,7 +4,7 @@ use mapper::{Mapper, TransactionMapper};
 use mysql;
 use solid::Solidate;
 use std::collections::{HashSet, VecDeque};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{mpsc, Arc};
 use std::thread;
 use std::time::{Instant, SystemTime};
 use utils::{DurationUtils, SystemTimeUtils};
@@ -58,27 +58,35 @@ fn perform(
   nodes.push_front((pivot_id, Some(height)));
   while let Some((id, height)) = nodes.pop_back() {
     counter += 1;
-    if let Some(references) = transaction_mapper.trunk_references(id) {
-      solidate_references(
-        conn,
-        transaction_mapper,
-        &mut nodes,
-        &mut trunk_visited,
-        &references,
-        height,
-        Solidate::Trunk,
-      )?;
+    if let Some(index) = transaction_mapper.trunk_index(id) {
+      if let Some(ref index) =
+        *transaction_mapper.fetch_trunk(conn, id, &index)?
+      {
+        solidate(
+          conn,
+          transaction_mapper,
+          &mut nodes,
+          &mut trunk_visited,
+          index,
+          height,
+          Solidate::Trunk,
+        )?;
+      }
     }
-    if let Some(references) = transaction_mapper.branch_references(id) {
-      solidate_references(
-        conn,
-        transaction_mapper,
-        &mut nodes,
-        &mut branch_visited,
-        &references,
-        None,
-        Solidate::Branch,
-      )?;
+    if let Some(index) = transaction_mapper.branch_index(id) {
+      if let Some(ref index) =
+        *transaction_mapper.fetch_branch(conn, id, &index)?
+      {
+        solidate(
+          conn,
+          transaction_mapper,
+          &mut nodes,
+          &mut branch_visited,
+          index,
+          None,
+          Solidate::Branch,
+        )?;
+      }
     }
   }
   if counter > 1 {
@@ -87,21 +95,23 @@ fn perform(
   Ok(())
 }
 
-fn solidate_references(
+fn solidate(
   conn: &mut mysql::Conn,
   transaction_mapper: &TransactionMapper,
   nodes: &mut VecDeque<(u64, Option<i32>)>,
   visited: &mut HashSet<u64>,
-  references: &Mutex<Vec<u64>>,
+  index: &[u64],
   height: Option<i32>,
   solidate: Solidate,
 ) -> Result<()> {
-  for &id in &*references.lock().unwrap() {
+  for &id in index {
     if !visited.insert(id) {
       continue;
     }
     let record = transaction_mapper.fetch(conn, id)?;
+    debug!("Mutex check at line {}", line!());
     let mut record = record.lock().unwrap();
+    debug!("Mutex check at line {}", line!());
     let mut solid = record.solid();
     if !solid.solidate(solidate) {
       continue;

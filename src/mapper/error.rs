@@ -4,7 +4,7 @@ use std::{error, fmt, result};
 #[derive(Debug)]
 pub enum Error {
   Mysql(mysql::Error),
-  RecordNotFound,
+  RecordNotFound(u64),
   ColumnNotFound,
   AddressChecksumToTrits,
 }
@@ -15,7 +15,7 @@ impl fmt::Display for Error {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match *self {
       Error::Mysql(ref err) => write!(f, "MySQL error: {}", err),
-      Error::RecordNotFound => write!(f, "Record not found"),
+      Error::RecordNotFound(id) => write!(f, "Record not found ({})", id),
       Error::ColumnNotFound => write!(f, "Column not found"),
       Error::AddressChecksumToTrits => {
         write!(f, "can't convert address checksum to trits")
@@ -28,7 +28,7 @@ impl error::Error for Error {
   fn description(&self) -> &str {
     match *self {
       Error::Mysql(ref err) => err.description(),
-      Error::RecordNotFound => "Record not found",
+      Error::RecordNotFound(_) => "Record not found",
       Error::ColumnNotFound => "Column not found",
       Error::AddressChecksumToTrits => "Can't convert to trits",
     }
@@ -37,7 +37,7 @@ impl error::Error for Error {
   fn cause(&self) -> Option<&error::Error> {
     match *self {
       Error::Mysql(ref err) => Some(err),
-      Error::RecordNotFound |
+      Error::RecordNotFound(_) |
       Error::ColumnNotFound |
       Error::AddressChecksumToTrits => None,
     }

@@ -64,8 +64,8 @@ impl<'a> InsertThread<'a> {
               transaction_mapper,
               address_mapper,
               bundle_mapper,
-              &message,
               &null_hash,
+              &message,
             );
             let duration = duration.elapsed().as_milliseconds();
             match result {
@@ -107,8 +107,8 @@ fn perform(
   transaction_mapper: &TransactionMapper,
   address_mapper: &AddressMapper,
   bundle_mapper: &BundleMapper,
-  message: &TransactionMessage,
   null_hash: &str,
+  message: &TransactionMessage,
 ) -> Result<
   (
     Option<ApproveMessage>,
@@ -118,23 +118,20 @@ fn perform(
 > {
   let (mut approve_data, mut solidate_data, mut calculate_data) =
     (None, None, None);
-  if !is_valid(message, null_hash) {
-    return Ok((approve_data, solidate_data, calculate_data));
-  }
-  let mut hashes =
-    vec![message.trunk_hash(), message.branch_hash(), message.hash()];
-  hashes.dedup();
-  let txs = transaction_mapper.fetch_many(conn, hashes)?;
+  let txs = transaction_mapper.fetch_many(
+    conn,
+    vec![message.trunk_hash(), message.branch_hash(), message.hash()],
+  )?;
+  debug!("Mutex check at line {}", line!());
   let mut txs = txs.iter().map(|tx| tx.lock().unwrap()).collect();
-  let txs = unwrap_transactions(&mut txs, message);
+  debug!("Mutex check at line {}", line!());
+  let txs = unwrap_transactions(null_hash, message, &mut txs);
   if let Some((mut current_tx, mut trunk_tx, mut branch_tx)) = txs {
     let timestamp = SystemTime::milliseconds_since_epoch()?;
-    solidate_genesis(trunk_tx, null_hash);
-    trunk_tx.direct_approve();
+    process_parent(conn, null_hash, trunk_tx)?;
     transaction_mapper.set_trunk(current_tx, trunk_tx.id_tx());
     if let Some(ref mut branch_tx) = branch_tx {
-      solidate_genesis(branch_tx, null_hash);
-      branch_tx.direct_approve();
+      process_parent(conn, null_hash, branch_tx)?;
       transaction_mapper.set_branch(current_tx, branch_tx.id_tx());
     } else {
       transaction_mapper.set_branch(current_tx, trunk_tx.id_tx());
@@ -160,15 +157,10 @@ fn perform(
   Ok((approve_data, solidate_data, calculate_data))
 }
 
-fn is_valid(message: &TransactionMessage, null_hash: &str) -> bool {
-  message.hash() != null_hash ||
-    message.hash() != message.trunk_hash() &&
-      message.hash() != message.branch_hash()
-}
-
 fn unwrap_transactions<'a>(
-  transactions: &'a mut Vec<MutexGuard<TransactionRecord>>,
+  null_hash: &str,
   message: &TransactionMessage,
+  transactions: &'a mut Vec<MutexGuard<TransactionRecord>>,
 ) -> Option<
   (
     &'a mut TransactionRecord,
@@ -176,6 +168,9 @@ fn unwrap_transactions<'a>(
     Option<&'a mut TransactionRecord>,
   ),
 > {
+  if message.hash() == null_hash || message.hash() == message.branch_hash() {
+    return None;
+  }
   let (mut current_tx, mut trunk_tx, mut branch_tx) = (None, None, None);
   for transaction in transactions {
     let transaction = &mut **transaction;
@@ -187,17 +182,24 @@ fn unwrap_transactions<'a>(
       branch_tx = Some(transaction);
     }
   }
-  current_tx.and_then(|current_tx| if current_tx.is_persisted() {
-    None
-  } else {
+  current_tx.and_then(|current_tx| if !current_tx.is_persisted() {
     trunk_tx.map(|trunk_tx| (current_tx, trunk_tx, branch_tx))
+  } else {
+    None
   })
 }
 
-fn solidate_genesis(tx: &mut TransactionRecord, null_hash: &str) {
+fn process_parent(
+  conn: &mut mysql::Conn,
+  null_hash: &str,
+  tx: &mut TransactionRecord,
+) -> Result<()> {
+  tx.direct_approve();
   if !tx.is_persisted() && tx.hash() == null_hash {
     tx.set_solid(Solid::Complete);
+    tx.insert(conn)?;
   }
+  Ok(())
 }
 
 fn set_id_address(
@@ -213,7 +215,9 @@ fn set_id_address(
       AddressRecord::new(id_address, message.address_hash().to_owned())
     },
   )?;
+  debug!("Mutex check at line {}", line!());
   let mut address = address.lock().unwrap();
+  debug!("Mutex check at line {}", line!());
   if !address.is_persisted() {
     address.insert(conn)?;
   }
@@ -240,7 +244,9 @@ fn set_id_bundle(
       ))
     },
   )?;
+  debug!("Mutex check at line {}", line!());
   let mut bundle = bundle.lock().unwrap();
+  debug!("Mutex check at line {}", line!());
   if !bundle.is_persisted() {
     bundle.insert(conn)?;
   }

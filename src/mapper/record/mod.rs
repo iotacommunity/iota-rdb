@@ -26,7 +26,7 @@ pub trait Record: Sized {
         format!("{} {}", Self::SELECT_QUERY, Self::SELECT_WHERE_ID),
         (id,),
       )?
-      .ok_or(Error::RecordNotFound)
+      .ok_or_else(|| Error::RecordNotFound(id))
       .and_then(|mut row| Self::from_row(&mut row))?)
   }
 

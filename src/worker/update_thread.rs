@@ -70,10 +70,10 @@ fn perform(
 ) -> Result<(usize, usize)> {
   let (mut updated, mut cleaned) = (0, 0);
   updated += transaction_mapper.update(conn)?;
-  cleaned += transaction_mapper.collect_garbage(generation_limit);
+  cleaned += transaction_mapper.prune(generation_limit);
   updated += address_mapper.update(conn)?;
-  cleaned += address_mapper.collect_garbage(generation_limit);
+  cleaned += address_mapper.prune(generation_limit);
   updated += bundle_mapper.update(conn)?;
-  cleaned += bundle_mapper.collect_garbage(generation_limit);
+  cleaned += bundle_mapper.prune(generation_limit);
   Ok((updated, cleaned))
 }

@@ -1,25 +1,18 @@
-use super::{Mapper, Record, Result, TransactionRecord};
+use super::{Garbage, Hashes, Index, Mapper, Record, Records, Result,
+            TransactionRecord};
 use mysql;
 use std::collections::{BTreeMap, HashMap};
-use std::hash::Hash;
-use std::sync::{Arc, Mutex, RwLock, RwLockWriteGuard};
-
-type Records = RwLock<BTreeMap<u64, Arc<Mutex<TransactionRecord>>>>;
-type Hashes = RwLock<HashMap<String, u64>>;
-type Index<K, V> = HashMap<K, Arc<Mutex<Vec<V>>>>;
-type IndexGuard<'a, K, V> = RwLockWriteGuard<'a, Index<K, V>>;
+use std::sync::{Arc, Mutex, MutexGuard, RwLock, RwLockWriteGuard};
 
 pub struct TransactionMapper {
   counter: Mutex<u64>,
-  records: Records,
-  hashes: Hashes,
-  trunks: RwLock<Index<u64, u64>>,
-  branches: RwLock<Index<u64, u64>>,
+  records: RwLock<Records<TransactionRecord>>,
+  hashes: RwLock<Hashes>,
+  indices: [RwLock<Records<Index>>; 2],
 }
 
-impl<'a> Mapper<'a> for TransactionMapper {
+impl Mapper for TransactionMapper {
   type Record = TransactionRecord;
-  type Indices = (IndexGuard<'a, u64, u64>, IndexGuard<'a, u64, u64>);
 
   fn new(conn: &mut mysql::Conn) -> Result<Self> {
     let counter = Self::init_counter(
@@ -28,14 +21,12 @@ impl<'a> Mapper<'a> for TransactionMapper {
     )?;
     let records = RwLock::new(BTreeMap::new());
     let hashes = RwLock::new(HashMap::new());
-    let trunks = RwLock::new(HashMap::new());
-    let branches = RwLock::new(HashMap::new());
+    let indices = [RwLock::new(BTreeMap::new()), RwLock::new(BTreeMap::new())];
     Ok(Self {
       counter,
       records,
       hashes,
-      trunks,
-      branches,
+      indices,
     })
   }
 
@@ -43,41 +34,48 @@ impl<'a> Mapper<'a> for TransactionMapper {
     &self.counter
   }
 
-  fn records(&self) -> &Records {
+  fn records(&self) -> &RwLock<Records<TransactionRecord>> {
     &self.records
   }
 
-  fn hashes(&self) -> &Hashes {
+  fn hashes(&self) -> &RwLock<Hashes> {
     &self.hashes
   }
 
-  fn indices(&'a self) -> Self::Indices {
-    let trunks = self.trunks.write().unwrap();
-    let branches = self.branches.write().unwrap();
-    (trunks, branches)
+  fn indices(&self) -> &[RwLock<Records<Index>>] {
+    &self.indices
   }
 
-  fn store_indices(
-    &mut (ref mut trunks, ref mut branches): &mut Self::Indices,
+  fn fill_indices(
+    indices: &mut [RwLockWriteGuard<Records<Index>>],
     record: &TransactionRecord,
   ) {
+    let inner = if record.is_persisted() {
+      None
+    } else {
+      Some(Vec::new())
+    };
+    indices[0].insert(record.id(), Arc::new(Mutex::new(inner.clone())));
+    indices[1].insert(record.id(), Arc::new(Mutex::new(inner)));
     if let Some(id_trunk) = record.id_trunk() {
-      store_index(trunks, id_trunk, record.id());
+      if let Some(index) = indices[0].get(&id_trunk) {
+        insert_ref(index, record.id());
+      }
     }
     if let Some(id_branch) = record.id_branch() {
-      store_index(branches, id_branch, record.id());
+      if let Some(index) = indices[1].get(&id_branch) {
+        insert_ref(index, record.id());
+      }
     }
   }
 
-  fn remove_indices(
-    &mut (ref mut trunks, ref mut branches): &mut Self::Indices,
-    record: &TransactionRecord,
-  ) {
-    if let Some(id_trunk) = record.id_trunk() {
-      remove_index(trunks, &id_trunk, &record.id());
-    }
-    if let Some(id_branch) = record.id_branch() {
-      remove_index(branches, &id_branch, &record.id());
+  fn mark_garbage(garbage: &Garbage<TransactionRecord>) {
+    for id in garbage.keys().cloned().collect::<Vec<_>>() {
+      if let Some(&Some((_, _, ref mark))) = garbage.get(&id) {
+        if mark.get().is_none() {
+          can_prune(garbage, id);
+        }
+      }
     }
   }
 }
@@ -86,11 +84,15 @@ impl TransactionMapper {
   pub fn fetch_many(
     &self,
     conn: &mut mysql::Conn,
-    input: Vec<&str>,
+    mut input: Vec<&str>,
   ) -> Result<Vec<Arc<Mutex<TransactionRecord>>>> {
+    input.dedup();
     let cached = {
+      debug!("Mutex check at line {}", line!());
       let records = self.records.read().unwrap();
+      debug!("Mutex check at line {}", line!());
       let hashes = self.hashes.read().unwrap();
+      debug!("Mutex check at line {}", line!());
       input
         .iter()
         .filter_map(|&hash| {
@@ -105,10 +107,14 @@ impl TransactionMapper {
       .filter(|&hash| !cached.contains_key(hash))
       .cloned()
       .collect::<Vec<_>>();
-    let found = TransactionRecord::find_by_hashes(conn, &missing)?;
+    let found = TransactionRecord::find_by_hashes(conn, missing)?;
+    debug!("Mutex check at line {}", line!());
     let mut records = self.records.write().unwrap();
+    debug!("Mutex check at line {}", line!());
     let mut hashes = self.hashes.write().unwrap();
-    let mut indices = self.indices();
+    debug!("Mutex check at line {}", line!());
+    let mut indices = self.lock_indices();
+    debug!("Mutex check at line {}", line!());
     let mut output = input
       .into_iter()
       .map(|hash| {
@@ -129,7 +135,12 @@ impl TransactionMapper {
                     self.next_id(),
                   )
                 });
-              Self::store(&mut records, &mut hashes, &mut indices, record)
+              let id_tx = record.id();
+              hashes.insert(hash.to_owned(), id_tx);
+              Self::fill_indices(&mut indices, &record);
+              let wrapper = Arc::new(Mutex::new(record));
+              records.insert(id_tx, wrapper.clone());
+              (id_tx, wrapper)
             })
         })
       })
@@ -138,22 +149,16 @@ impl TransactionMapper {
     Ok(output.into_iter().map(|(_, record)| record).collect())
   }
 
-  pub fn trunk_references(&self, id: u64) -> Option<Arc<Mutex<Vec<u64>>>> {
-    let trunks = self.trunks.read().unwrap();
-    trunks.get(&id).cloned()
-  }
-
-  pub fn branch_references(&self, id: u64) -> Option<Arc<Mutex<Vec<u64>>>> {
-    let branches = self.branches.read().unwrap();
-    branches.get(&id).cloned()
-  }
-
   pub fn set_trunk(&self, record: &mut TransactionRecord, id_trunk: u64) {
     match record.id_trunk() {
       Some(_) => panic!("`id_trunk` is immutable"),
       None => {
-        let mut trunks = self.trunks.write().unwrap();
-        store_index(&mut trunks, id_trunk, record.id());
+        debug!("Mutex check at line {}", line!());
+        let trunks = self.indices[0].read().unwrap();
+        debug!("Mutex check at line {}", line!());
+        if let Some(index) = trunks.get(&id_trunk) {
+          insert_ref(index, record.id());
+        }
         record.set_id_trunk(Some(id_trunk));
       }
     }
@@ -163,44 +168,132 @@ impl TransactionMapper {
     match record.id_branch() {
       Some(_) => panic!("`id_branch` is immutable"),
       None => {
-        let mut branches = self.branches.write().unwrap();
-        store_index(&mut branches, id_branch, record.id());
+        debug!("Mutex check at line {}", line!());
+        let branches = self.indices[1].read().unwrap();
+        debug!("Mutex check at line {}", line!());
+        if let Some(index) = branches.get(&id_branch) {
+          insert_ref(index, record.id());
+        }
         record.set_id_branch(Some(id_branch));
       }
     }
   }
-}
 
-fn store_index<K, V>(index: &mut IndexGuard<K, V>, key: K, value: V)
-where
-  K: Eq + Hash,
-  V: Ord,
-{
-  let vec = index
-    .entry(key)
-    .or_insert_with(|| Arc::new(Mutex::new(Vec::new())));
-  let mut vec = vec.lock().unwrap();
-  if let Err(i) = vec.binary_search(&value) {
-    vec.insert(i, value);
+  pub fn trunk_index(&self, id: u64) -> Option<Arc<Mutex<Option<Vec<u64>>>>> {
+    debug!("Mutex check at line {}", line!());
+    let trunks = self.indices[0].read().unwrap();
+    debug!("Mutex check at line {}", line!());
+    trunks.get(&id).cloned()
   }
-}
 
-fn remove_index<K, V>(index: &mut IndexGuard<K, V>, key: &K, value: &V)
-where
-  K: Eq + Hash,
-  V: Ord,
-{
-  let mut remove = false;
-  if let Some(vec) = index.get(key) {
-    let mut vec = vec.lock().unwrap();
-    if let Ok(i) = vec.binary_search(value) {
-      vec.remove(i);
-      if vec.is_empty() {
-        remove = true;
+  pub fn branch_index(&self, id: u64) -> Option<Arc<Mutex<Option<Vec<u64>>>>> {
+    debug!("Mutex check at line {}", line!());
+    let branches = self.indices[1].read().unwrap();
+    debug!("Mutex check at line {}", line!());
+    branches.get(&id).cloned()
+  }
+
+  pub fn fetch_trunk<'a>(
+    &self,
+    conn: &mut mysql::Conn,
+    id: u64,
+    index: &'a Mutex<Option<Vec<u64>>>,
+  ) -> Result<MutexGuard<'a, Option<Vec<u64>>>> {
+    self.fetch_children(conn, id, index, TransactionRecord::find_trunk)
+  }
+
+  pub fn fetch_branch<'a>(
+    &self,
+    conn: &mut mysql::Conn,
+    id: u64,
+    index: &'a Mutex<Option<Vec<u64>>>,
+  ) -> Result<MutexGuard<'a, Option<Vec<u64>>>> {
+    self.fetch_children(conn, id, index, TransactionRecord::find_branch)
+  }
+
+  fn fetch_children<'a, F>(
+    &self,
+    conn: &mut mysql::Conn,
+    id: u64,
+    index: &'a Mutex<Option<Vec<u64>>>,
+    f: F,
+  ) -> Result<MutexGuard<'a, Option<Vec<u64>>>>
+  where
+    F: FnOnce(&mut mysql::Conn, u64)
+      -> Result<Vec<TransactionRecord>>,
+  {
+    {
+      debug!("Mutex check at line {}", line!());
+      let guard = index.lock().unwrap();
+      debug!("Mutex check at line {}", line!());
+      if guard.is_some() {
+        return Ok(guard);
       }
     }
+    f(conn, id).map(|found| {
+      debug!("Mutex check at line {}", line!());
+      let mut records = self.records.write().unwrap();
+      debug!("Mutex check at line {}", line!());
+      let mut hashes = self.hashes.write().unwrap();
+      debug!("Mutex check at line {}", line!());
+      let mut index = index.lock().unwrap();
+      debug!("Mutex check at line {}", line!());
+      match *index {
+        Some(_) => index,
+        None => {
+          let mut ids = found
+            .into_iter()
+            .map(|record| {
+              let id_tx = record.id();
+              records.entry(id_tx).or_insert_with(|| {
+                hashes.insert(record.hash().to_owned(), id_tx);
+                Arc::new(Mutex::new(record))
+              });
+              id_tx
+            })
+            .collect::<Vec<_>>();
+          ids.sort_unstable();
+          ids.dedup();
+          *index = Some(ids);
+          index
+        }
+      }
+    })
   }
-  if remove {
-    index.remove(key);
+}
+
+fn insert_ref(index: &Mutex<Option<Vec<u64>>>, id: u64) {
+  debug!("Mutex check at line {}", line!());
+  let mut index = index.lock().unwrap();
+  debug!("Mutex check at line {}", line!());
+  if let Some(ref mut vec) = *index {
+    if let Err(i) = vec.binary_search(&id) {
+      vec.insert(i, id);
+    }
   }
+}
+
+fn can_prune(garbage: &Garbage<TransactionRecord>, id: u64) -> bool {
+  garbage
+    .get(&id)
+    .map(|data| {
+      data
+        .as_ref()
+        .map(|&(ref record, _, ref mark)| {
+          mark.get().unwrap_or_else(|| {
+            let prune = record
+              .id_trunk()
+              .map(|id_trunk| can_prune(garbage, id_trunk))
+              .unwrap_or(true) &&
+              record
+                .id_branch()
+                .map(|id_branch| can_prune(garbage, id_branch))
+                .unwrap_or(true);
+            mark.set(Some(prune));
+            prune
+          })
+        })
+        .unwrap_or(false)
+    })
+    .unwrap_or(true)
 }

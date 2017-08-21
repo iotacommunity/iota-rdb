@@ -55,6 +55,8 @@ const SELECT_QUERY: &str = r#"
 const WHERE_HASH_ONE: &str = r"WHERE hash = ?";
 const WHERE_HASH_TWO: &str = r"WHERE hash IN (?, ?)";
 const WHERE_HASH_THREE: &str = r"WHERE hash IN (?, ?, ?)";
+const WHERE_ID_TRUNK: &str = r"WHERE id_trunk = ?";
+const WHERE_ID_BRANCH: &str = r"WHERE id_branch = ?";
 
 impl Record for TransactionRecord {
   impl_record!();
@@ -239,8 +241,10 @@ impl TransactionRecord {
 
   pub fn find_by_hashes(
     conn: &mut mysql::Conn,
-    hashes: &[&str],
+    mut hashes: Vec<&str>,
   ) -> Result<Vec<TransactionRecord>> {
+    hashes.sort_unstable();
+    hashes.dedup();
     let mut results = Vec::new();
     for hashes in hashes.chunks(3) {
       let rows = match hashes.len() {
@@ -261,6 +265,32 @@ impl TransactionRecord {
       for row in rows {
         results.push(TransactionRecord::from_row(&mut row?)?);
       }
+    }
+    Ok(results)
+  }
+
+  pub fn find_trunk(
+    conn: &mut mysql::Conn,
+    id: u64,
+  ) -> Result<Vec<TransactionRecord>> {
+    let mut results = Vec::new();
+    for row in conn
+      .prep_exec(format!("{} {}", SELECT_QUERY, WHERE_ID_TRUNK), (id,))?
+    {
+      results.push(TransactionRecord::from_row(&mut row?)?);
+    }
+    Ok(results)
+  }
+
+  pub fn find_branch(
+    conn: &mut mysql::Conn,
+    id: u64,
+  ) -> Result<Vec<TransactionRecord>> {
+    let mut results = Vec::new();
+    for row in conn
+      .prep_exec(format!("{} {}", SELECT_QUERY, WHERE_ID_BRANCH), (id,))?
+    {
+      results.push(TransactionRecord::from_row(&mut row?)?);
     }
     Ok(results)
   }

@@ -4,7 +4,7 @@ use mapper::{BundleMapper, Mapper, Record, TransactionMapper,
              TransactionRecord};
 use mysql;
 use std::collections::{HashSet, VecDeque};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{mpsc, Arc};
 use std::thread;
 use std::time::{Instant, SystemTime};
 use utils::{DurationUtils, SystemTimeUtils};
@@ -73,24 +73,29 @@ fn perform_reverse(
   bundle_mapper: &BundleMapper,
   id: u64,
 ) -> Result<()> {
-  let mut mst_timestamp = reference_approval(
-    conn,
-    transaction_mapper,
-    id,
-    TransactionMapper::trunk_references,
-  )?;
+  let mut mst_timestamp = None;
+  if let Some(index) = transaction_mapper.trunk_index(id) {
+    if let Some(ref index) =
+      *transaction_mapper.fetch_trunk(conn, id, &index)?
+    {
+      mst_timestamp = approved_child(conn, transaction_mapper, index)?;
+    }
+  }
   if mst_timestamp.is_none() {
-    mst_timestamp = reference_approval(
-      conn,
-      transaction_mapper,
-      id,
-      TransactionMapper::branch_references,
-    )?;
+    if let Some(index) = transaction_mapper.branch_index(id) {
+      if let Some(ref index) =
+        *transaction_mapper.fetch_branch(conn, id, &index)?
+      {
+        mst_timestamp = approved_child(conn, transaction_mapper, index)?;
+      }
+    }
   }
   if let Some(mst_timestamp) = mst_timestamp {
     let (id_trunk, id_branch) = {
       let transaction = transaction_mapper.fetch(conn, id)?;
+      debug!("Mutex check at line {}", line!());
       let mut transaction = transaction.lock().unwrap();
+      debug!("Mutex check at line {}", line!());
       approve(
         conn,
         bundle_mapper,
@@ -133,7 +138,9 @@ fn perform_front(
       continue;
     }
     let transaction = transaction_mapper.fetch(conn, id)?;
+    debug!("Mutex check at line {}", line!());
     let mut transaction = transaction.lock().unwrap();
+    debug!("Mutex check at line {}", line!());
     if transaction.mst_a() || !transaction.is_persisted() {
       continue;
     }
@@ -158,23 +165,18 @@ fn perform_front(
   Ok(())
 }
 
-fn reference_approval<T>(
+fn approved_child(
   conn: &mut mysql::Conn,
   transaction_mapper: &TransactionMapper,
-  id: u64,
-  f: T,
-) -> Result<Option<f64>>
-where
-  T: FnOnce(&TransactionMapper, u64)
-    -> Option<Arc<Mutex<Vec<u64>>>>,
-{
-  if let Some(references) = f(transaction_mapper, id) {
-    for &id in &*references.lock().unwrap() {
-      let record = transaction_mapper.fetch(conn, id)?;
-      let record = record.lock().unwrap();
-      if record.mst_a() {
-        return Ok(Some(record.mst_timestamp()));
-      }
+  index: &[u64],
+) -> Result<Option<f64>> {
+  for &id in index {
+    let record = transaction_mapper.fetch(conn, id)?;
+    debug!("Mutex check at line {}", line!());
+    let record = record.lock().unwrap();
+    debug!("Mutex check at line {}", line!());
+    if record.mst_a() {
+      return Ok(Some(record.mst_timestamp()));
     }
   }
   Ok(None)
@@ -189,7 +191,9 @@ fn approve(
 ) -> Result<()> {
   if transaction.current_idx() == 0 {
     let bundle = bundle_mapper.fetch(conn, transaction.id_bundle())?;
+    debug!("Mutex check at line {}", line!());
     bundle.lock().unwrap().set_confirmed(timestamp);
+    debug!("Mutex check at line {}", line!());
   }
   let timestamp = transaction.timestamp();
   transaction.set_conftime(mst_timestamp - timestamp);

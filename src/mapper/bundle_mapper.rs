@@ -1,20 +1,17 @@
-use super::{BundleRecord, Mapper, Result};
+use super::{BundleRecord, Garbage, Hashes, Index, Mapper, Records, Result};
 use mysql;
 use std::collections::{BTreeMap, HashMap};
-use std::sync::{Arc, Mutex, RwLock};
-
-type Records = RwLock<BTreeMap<u64, Arc<Mutex<BundleRecord>>>>;
-type Hashes = RwLock<HashMap<String, u64>>;
+use std::sync::{Mutex, RwLock, RwLockWriteGuard};
 
 pub struct BundleMapper {
   counter: Mutex<u64>,
-  records: Records,
-  hashes: Hashes,
+  records: RwLock<Records<BundleRecord>>,
+  hashes: RwLock<Hashes>,
+  indices: [RwLock<Records<Index>>; 0],
 }
 
-impl<'a> Mapper<'a> for BundleMapper {
+impl Mapper for BundleMapper {
   type Record = BundleRecord;
-  type Indices = ();
 
   fn new(conn: &mut mysql::Conn) -> Result<Self> {
     let counter = Self::init_counter(
@@ -23,10 +20,12 @@ impl<'a> Mapper<'a> for BundleMapper {
     )?;
     let records = RwLock::new(BTreeMap::new());
     let hashes = RwLock::new(HashMap::new());
+    let indices = [];
     Ok(Self {
       counter,
       records,
       hashes,
+      indices,
     })
   }
 
@@ -34,17 +33,23 @@ impl<'a> Mapper<'a> for BundleMapper {
     &self.counter
   }
 
-  fn records(&self) -> &Records {
+  fn records(&self) -> &RwLock<Records<BundleRecord>> {
     &self.records
   }
 
-  fn hashes(&self) -> &Hashes {
+  fn hashes(&self) -> &RwLock<Hashes> {
     &self.hashes
   }
 
-  fn indices(&self) {}
+  fn indices(&self) -> &[RwLock<Records<Index>>] {
+    &self.indices
+  }
 
-  fn store_indices(_indices: &mut (), _record: &BundleRecord) {}
+  fn fill_indices(
+    _indices: &mut [RwLockWriteGuard<Records<Index>>],
+    _record: &BundleRecord,
+  ) {
+  }
 
-  fn remove_indices(_indices: &mut (), _record: &BundleRecord) {}
+  fn mark_garbage(_garbage: &Garbage<BundleRecord>) {}
 }
