@@ -75,8 +75,7 @@ fn perform_reverse(
 ) -> Result<()> {
   let mut mst_timestamp = None;
   if let Some(index) = transaction_mapper.trunk_index(id) {
-    if let Some(ref index) =
-      *transaction_mapper.fetch_trunk(conn, id, &index)?
+    if let Some(ref index) = *transaction_mapper.fetch_trunk(conn, id, &index)?
     {
       mst_timestamp = approved_child(conn, transaction_mapper, index)?;
     }

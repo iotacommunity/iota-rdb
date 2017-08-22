@@ -1,15 +1,6 @@
-array_layout = "Block"
-fn_args_layout = "Block"
-fn_call_style = "Block"
 force_format_strings = true
 format_strings = true
-generics_indent = "Block"
-generics_style = "Rfc"
 max_width = 80
-normalize_comments = true
-reorder_imported_names = true
+reorder_imports_in_group = true
 reorder_imports = true
 tab_spaces = 2
-where_style = "Rfc"
-wrap_comments = true
-write_mode = "Overwrite"

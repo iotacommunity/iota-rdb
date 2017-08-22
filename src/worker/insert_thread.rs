@@ -236,13 +236,10 @@ fn set_id_address(
   message: &TransactionMessage,
   current_tx: &mut TransactionRecord,
 ) -> Result<()> {
-  let address = address_mapper.fetch_by_hash(
-    conn,
-    message.address_hash(),
-    |id_address| {
+  let address =
+    address_mapper.fetch_by_hash(conn, message.address_hash(), |id_address| {
       AddressRecord::new(id_address, message.address_hash().to_owned())
-    },
-  )?;
+    })?;
   debug!("Mutex check at line {}", line!());
   let mut address = address.lock().unwrap();
   debug!("Mutex check at line {}", line!());
@@ -260,18 +257,15 @@ fn set_id_bundle(
   current_tx: &mut TransactionRecord,
   timestamp: f64,
 ) -> Result<()> {
-  let bundle = bundle_mapper.fetch_by_hash(
-    conn,
-    message.bundle_hash(),
-    |id_bundle| {
+  let bundle =
+    bundle_mapper.fetch_by_hash(conn, message.bundle_hash(), |id_bundle| {
       Ok(BundleRecord::new(
         id_bundle,
         message.bundle_hash().to_owned(),
         message.last_index(),
         timestamp,
       ))
-    },
-  )?;
+    })?;
   debug!("Mutex check at line {}", line!());
   let mut bundle = bundle.lock().unwrap();
   debug!("Mutex check at line {}", line!());

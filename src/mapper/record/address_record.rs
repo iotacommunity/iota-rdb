@@ -82,8 +82,8 @@ impl AddressRecord {
   impl_setter!(checksum, set_checksum, String);
 
   pub fn new(id_address: u64, address: String) -> Result<Self> {
-    let checksum = utils::trits_checksum(&address)
-      .ok_or(Error::AddressChecksumToTrits)?;
+    let checksum =
+      utils::trits_checksum(&address).ok_or(Error::AddressChecksumToTrits)?;
     Ok(Self {
       generation: 0,
       persisted: false,

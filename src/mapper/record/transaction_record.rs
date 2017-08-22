@@ -274,8 +274,8 @@ impl TransactionRecord {
     id: u64,
   ) -> Result<Vec<TransactionRecord>> {
     let mut results = Vec::new();
-    for row in conn
-      .prep_exec(format!("{} {}", SELECT_QUERY, WHERE_ID_TRUNK), (id,))?
+    for row in
+      conn.prep_exec(format!("{} {}", SELECT_QUERY, WHERE_ID_TRUNK), (id,))?
     {
       results.push(TransactionRecord::from_row(&mut row?)?);
     }
@@ -287,8 +287,8 @@ impl TransactionRecord {
     id: u64,
   ) -> Result<Vec<TransactionRecord>> {
     let mut results = Vec::new();
-    for row in conn
-      .prep_exec(format!("{} {}", SELECT_QUERY, WHERE_ID_BRANCH), (id,))?
+    for row in
+      conn.prep_exec(format!("{} {}", SELECT_QUERY, WHERE_ID_BRANCH), (id,))?
     {
       results.push(TransactionRecord::from_row(&mut row?)?);
     }

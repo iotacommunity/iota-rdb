@@ -2,16 +2,16 @@
 #![cfg_attr(feature = "clippy", plugin(clippy))]
 
 #[macro_use]
-extern crate log;
+extern crate clap;
+extern crate iota_curl_cpu;
+extern crate iota_sign;
+extern crate iota_trytes;
 extern crate log4rs;
 #[macro_use]
-extern crate clap;
-extern crate zmq;
+extern crate log;
 #[macro_use]
 extern crate mysql;
-extern crate iota_trytes;
-extern crate iota_sign;
-extern crate iota_curl_cpu;
+extern crate zmq;
 
 #[macro_use]
 mod macros;
