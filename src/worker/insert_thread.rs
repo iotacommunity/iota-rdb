@@ -5,7 +5,7 @@ use mapper::{AddressMapper, AddressRecord, BundleMapper, BundleRecord, Mapper,
 use message::TransactionMessage;
 use mysql;
 use solid::{Solid, Solidate};
-use std::sync::{mpsc, Arc, MutexGuard};
+use std::sync::{mpsc, Arc, Mutex, MutexGuard};
 use std::thread;
 use std::time::{Instant, SystemTime};
 use utils::{self, DurationUtils, SystemTimeUtils};
@@ -25,6 +25,14 @@ pub struct InsertThread<'a> {
   pub milestone_address: &'a str,
   pub milestone_start_index: String,
 }
+
+type UnwrappedTransactions<'a> = Option<
+  (
+    (u64, &'a Mutex<TransactionRecord>),
+    Option<(u64, &'a Mutex<TransactionRecord>)>,
+    &'a Mutex<TransactionRecord>,
+  ),
+>;
 
 impl<'a> InsertThread<'a> {
   pub fn spawn(self) {
@@ -122,47 +130,66 @@ fn perform(
     conn,
     vec![message.trunk_hash(), message.branch_hash(), message.hash()],
   )?;
-  debug!("Mutex check at line {}", line!());
-  let mut indices = transaction_mapper.lock_indices();
-  debug!("Mutex check at line {}", line!());
-  let mut txs = txs.iter().map(|tx| tx.lock().unwrap()).collect();
-  debug!("Mutex check at line {}", line!());
-  let txs = unwrap_transactions(null_hash, message, &mut txs);
-  if let Some((mut current_tx, mut trunk_tx, mut branch_tx)) = txs {
-    let timestamp = SystemTime::milliseconds_since_epoch()?;
-    process_parent(conn, null_hash, trunk_tx)?;
-    TransactionMapper::set_id_trunk(&mut indices, current_tx, trunk_tx.id_tx());
-    if let Some(ref mut branch_tx) = branch_tx {
-      process_parent(conn, null_hash, branch_tx)?;
-      TransactionMapper::set_id_branch(
-        &mut indices,
-        current_tx,
-        branch_tx.id_tx(),
-      );
-    } else {
-      TransactionMapper::set_id_branch(
-        &mut indices,
-        current_tx,
+  let txs = unwrap_transactions(null_hash, message, &txs);
+  if let Some(((id_trunk, trunk_tx), branch_tx, current_tx)) = txs {
+    let trunk_index = transaction_mapper.trunk_index(id_trunk).unwrap();
+    let branch_index = branch_tx
+      .map(|(id_branch, _)| id_branch)
+      .unwrap_or(id_trunk);
+    let branch_index = transaction_mapper.branch_index(branch_index).unwrap();
+    debug!("Mutex check at line {}", line!());
+    let mut trunk_index = trunk_index.lock().unwrap();
+    debug!("Mutex check at line {}", line!());
+    let mut branch_index = branch_index.lock().unwrap();
+    debug!("Mutex check at line {}", line!());
+    let mut trunk_tx = trunk_tx.lock().unwrap();
+    debug!("Mutex check at line {}", line!());
+    let mut branch_tx = branch_tx
+      .as_ref()
+      .map(|&(_, branch_tx)| branch_tx.lock().unwrap());
+    debug!("Mutex check at line {}", line!());
+    let mut current_tx = current_tx.lock().unwrap();
+    debug!("Mutex check at line {}", line!());
+    if !current_tx.is_persisted() {
+      let timestamp = SystemTime::milliseconds_since_epoch()?;
+      process_parent(conn, null_hash, &mut trunk_tx)?;
+      TransactionMapper::set_id_trunk(
+        &mut trunk_index,
+        &mut current_tx,
         trunk_tx.id_tx(),
       );
+      if let Some(ref mut branch_tx) = branch_tx {
+        process_parent(conn, null_hash, branch_tx)?;
+        TransactionMapper::set_id_branch(
+          &mut branch_index,
+          &mut current_tx,
+          branch_tx.id_tx(),
+        );
+      } else {
+        TransactionMapper::set_id_branch(
+          &mut branch_index,
+          &mut current_tx,
+          trunk_tx.id_tx(),
+        );
+      }
+      set_id_address(conn, address_mapper, message, &mut current_tx)?;
+      set_id_bundle(conn, bundle_mapper, message, &mut current_tx, timestamp)?;
+      set_solid(message, &mut current_tx, &trunk_tx, &branch_tx);
+      set_height(message, &mut current_tx, &trunk_tx);
+      current_tx.set_tag(message.tag().to_owned());
+      current_tx.set_value(message.value());
+      current_tx.set_timestamp(message.timestamp());
+      current_tx.set_arrival(message.arrival());
+      current_tx.set_current_idx(message.current_index());
+      current_tx.set_last_idx(message.last_index());
+      current_tx.set_is_mst(message.is_milestone());
+      current_tx.set_mst_a(message.is_milestone());
+      insert_events(conn, message, &current_tx, timestamp)?;
+      set_approve_data(&mut approve_data, &current_tx);
+      set_solidate_data(&mut solidate_data, &current_tx);
+      set_calculate_data(&mut calculate_data, &current_tx);
+      current_tx.insert(conn)?;
     }
-    set_id_address(conn, address_mapper, message, current_tx)?;
-    set_id_bundle(conn, bundle_mapper, message, current_tx, timestamp)?;
-    set_solid(message, current_tx, trunk_tx, &branch_tx);
-    set_height(message, current_tx, trunk_tx);
-    current_tx.set_tag(message.tag().to_owned());
-    current_tx.set_value(message.value());
-    current_tx.set_timestamp(message.timestamp());
-    current_tx.set_arrival(message.arrival());
-    current_tx.set_current_idx(message.current_index());
-    current_tx.set_last_idx(message.last_index());
-    current_tx.set_is_mst(message.is_milestone());
-    current_tx.set_mst_a(message.is_milestone());
-    insert_events(conn, message, current_tx, timestamp)?;
-    set_approve_data(&mut approve_data, current_tx);
-    set_solidate_data(&mut solidate_data, current_tx);
-    set_calculate_data(&mut calculate_data, current_tx);
-    current_tx.insert(conn)?;
   }
   Ok((approve_data, solidate_data, calculate_data))
 }
@@ -170,32 +197,23 @@ fn perform(
 fn unwrap_transactions<'a>(
   null_hash: &str,
   message: &TransactionMessage,
-  transactions: &'a mut Vec<MutexGuard<TransactionRecord>>,
-) -> Option<
-  (
-    &'a mut TransactionRecord,
-    &'a mut TransactionRecord,
-    Option<&'a mut TransactionRecord>,
-  ),
-> {
+  transactions: &'a [(u64, String, Arc<Mutex<TransactionRecord>>)],
+) -> UnwrappedTransactions<'a> {
   if message.hash() == null_hash || message.hash() == message.branch_hash() {
     return None;
   }
   let (mut current_tx, mut trunk_tx, mut branch_tx) = (None, None, None);
-  for transaction in transactions {
-    let transaction = &mut **transaction;
-    if transaction.hash() == message.hash() {
-      current_tx = Some(transaction);
-    } else if transaction.hash() == message.trunk_hash() {
-      trunk_tx = Some(transaction);
-    } else if transaction.hash() == message.branch_hash() {
-      branch_tx = Some(transaction);
+  for &(id_tx, ref hash, ref transaction) in transactions {
+    if hash == message.hash() {
+      current_tx = Some(&**transaction);
+    } else if hash == message.trunk_hash() {
+      trunk_tx = Some((id_tx, &**transaction));
+    } else if hash == message.branch_hash() {
+      branch_tx = Some((id_tx, &**transaction));
     }
   }
-  current_tx.and_then(|current_tx| if !current_tx.is_persisted() {
-    trunk_tx.map(|trunk_tx| (current_tx, trunk_tx, branch_tx))
-  } else {
-    None
+  current_tx.and_then(|current_tx| {
+    trunk_tx.map(|trunk_tx| (trunk_tx, branch_tx, current_tx))
   })
 }
 
@@ -268,7 +286,7 @@ fn set_solid(
   message: &TransactionMessage,
   current_tx: &mut TransactionRecord,
   trunk_tx: &TransactionRecord,
-  branch_tx: &Option<&mut TransactionRecord>,
+  branch_tx: &Option<MutexGuard<TransactionRecord>>,
 ) {
   let mut solid = message.solid();
   let mut is_complete = trunk_tx.solid().is_complete();
@@ -299,7 +317,7 @@ fn set_height(
 fn insert_events(
   conn: &mut mysql::Conn,
   message: &TransactionMessage,
-  current_tx: &mut TransactionRecord,
+  current_tx: &TransactionRecord,
   timestamp: f64,
 ) -> Result<()> {
   event::new_transaction_received(conn, timestamp)?;

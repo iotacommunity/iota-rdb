@@ -11,6 +11,10 @@ pub struct TransactionMapper {
   indices: [RwLock<Records<Index>>; 2],
 }
 
+type FetchManyResult = Result<
+  Vec<(u64, String, Arc<Mutex<TransactionRecord>>)>,
+>;
+
 impl Mapper for TransactionMapper {
   type Record = TransactionRecord;
 
@@ -59,12 +63,18 @@ impl Mapper for TransactionMapper {
     indices[1].insert(record.id(), Arc::new(Mutex::new(inner)));
     if let Some(id_trunk) = record.id_trunk() {
       if let Some(index) = indices[0].get(&id_trunk) {
-        insert_ref(index, record.id());
+        debug!("Mutex check at line {}", line!());
+        let mut index = index.lock().unwrap();
+        debug!("Mutex check at line {}", line!());
+        insert_ref(&mut index, record.id());
       }
     }
     if let Some(id_branch) = record.id_branch() {
       if let Some(index) = indices[1].get(&id_branch) {
-        insert_ref(index, record.id());
+        debug!("Mutex check at line {}", line!());
+        let mut index = index.lock().unwrap();
+        debug!("Mutex check at line {}", line!());
+        insert_ref(&mut index, record.id());
       }
     }
   }
@@ -82,32 +92,28 @@ impl Mapper for TransactionMapper {
 
 impl TransactionMapper {
   pub fn set_id_trunk(
-    indices: &mut [RwLockWriteGuard<Records<Index>>],
+    index: &mut Option<Vec<u64>>,
     record: &mut TransactionRecord,
     id_trunk: u64,
   ) {
     match record.id_trunk() {
       Some(_) => panic!("`id_trunk` is immutable"),
       None => {
-        if let Some(index) = indices[0].get(&id_trunk) {
-          insert_ref(index, record.id());
-        }
+        insert_ref(index, record.id());
         record.set_id_trunk(Some(id_trunk));
       }
     }
   }
 
   pub fn set_id_branch(
-    indices: &mut [RwLockWriteGuard<Records<Index>>],
+    index: &mut Option<Vec<u64>>,
     record: &mut TransactionRecord,
     id_branch: u64,
   ) {
     match record.id_branch() {
       Some(_) => panic!("`id_branch` is immutable"),
       None => {
-        if let Some(index) = indices[1].get(&id_branch) {
-          insert_ref(index, record.id());
-        }
+        insert_ref(index, record.id());
         record.set_id_branch(Some(id_branch));
       }
     }
@@ -117,7 +123,7 @@ impl TransactionMapper {
     &self,
     conn: &mut mysql::Conn,
     mut input: Vec<&str>,
-  ) -> Result<Vec<Arc<Mutex<TransactionRecord>>>> {
+  ) -> FetchManyResult {
     input.dedup();
     let cached = {
       debug!("Mutex check at line {}", line!());
@@ -150,35 +156,42 @@ impl TransactionMapper {
     let mut output = input
       .into_iter()
       .map(|hash| {
-        cached.get(hash).cloned().unwrap_or_else(|| {
-          hashes
-            .get(hash)
-            .and_then(|&id_tx| {
-              records.get(&id_tx).map(|record| (id_tx, record.clone()))
-            })
-            .unwrap_or_else(|| {
-              let record = found
-                .iter()
-                .find(|record| record.hash() == hash)
-                .cloned()
-                .unwrap_or_else(|| {
-                  TransactionRecord::placeholder(
-                    hash.to_owned(),
-                    self.next_id(),
-                  )
-                });
-              let id_tx = record.id();
-              hashes.insert(hash.to_owned(), id_tx);
-              Self::fill_indices(&mut indices, &record);
-              let wrapper = Arc::new(Mutex::new(record));
-              records.insert(id_tx, wrapper.clone());
-              (id_tx, wrapper)
-            })
-        })
+        cached
+          .get(hash)
+          .map(|&(id_tx, ref record)| {
+            (id_tx, hash.to_owned(), record.clone())
+          })
+          .unwrap_or_else(|| {
+            hashes
+              .get(hash)
+              .and_then(|&id_tx| {
+                records
+                  .get(&id_tx)
+                  .map(|record| (id_tx, hash.to_owned(), record.clone()))
+              })
+              .unwrap_or_else(|| {
+                let record = found
+                  .iter()
+                  .find(|record| record.hash() == hash)
+                  .cloned()
+                  .unwrap_or_else(|| {
+                    TransactionRecord::placeholder(
+                      hash.to_owned(),
+                      self.next_id(),
+                    )
+                  });
+                let id_tx = record.id();
+                hashes.insert(hash.to_owned(), id_tx);
+                Self::fill_indices(&mut indices, &record);
+                let wrapper = Arc::new(Mutex::new(record));
+                records.insert(id_tx, wrapper.clone());
+                (id_tx, hash.to_owned(), wrapper)
+              })
+          })
       })
       .collect::<Vec<_>>();
-    output.sort_unstable_by_key(|&(id_tx, _)| id_tx);
-    Ok(output.into_iter().map(|(_, record)| record).collect())
+    output.sort_unstable_by_key(|&(id_tx, _, _)| id_tx);
+    Ok(output)
   }
 
   pub fn trunk_index(&self, id: u64) -> Option<Arc<Mutex<Option<Vec<u64>>>>> {
@@ -264,10 +277,7 @@ impl TransactionMapper {
   }
 }
 
-fn insert_ref(index: &Mutex<Option<Vec<u64>>>, id: u64) {
-  debug!("Mutex check at line {}", line!());
-  let mut index = index.lock().unwrap();
-  debug!("Mutex check at line {}", line!());
+fn insert_ref(index: &mut Option<Vec<u64>>, id: u64) {
   if let Some(ref mut vec) = *index {
     if let Err(i) = vec.binary_search(&id) {
       vec.insert(i, id);
