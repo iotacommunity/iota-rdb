@@ -7,6 +7,6 @@ appenders:
     append: false
 
 root:
-  level: debug
+  level: info
   appenders:
     - file
