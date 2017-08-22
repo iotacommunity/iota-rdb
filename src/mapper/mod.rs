@@ -187,37 +187,36 @@ pub trait Mapper: Sized {
     debug!("Mutex check at line {}", line!());
     let mut indices = self.lock_indices();
     debug!("Mutex check at line {}", line!());
-    let record_refs = records.values().cloned().collect::<Vec<_>>();
+    let record_refs = records
+      .iter()
+      .map(|(&k, v)| (k, v.clone()))
+      .collect::<BTreeMap<_, _>>();
     let index_refs = indices
       .iter()
       .map(|i| i.iter().map(|(&k, v)| (k, v.clone())).collect())
-      .collect::<Vec<BTreeMap<_, _>>>();
+      .collect::<Vec<HashMap<_, _>>>();
     let garbage: Garbage<Self::Record> = record_refs
       .iter()
-      .map(|reference| {
-        debug!("Mutex check at line {}", line!());
-        let record = reference.lock().unwrap();
-        debug!("Mutex check at line {}", line!());
-        let id = record.id();
-        let index_refs = index_refs
-          .iter()
-          .filter_map(|index| index.get(&id))
-          .collect::<Vec<_>>();
-        debug!("Mutex check at line {}", line!());
-        let indices = index_refs
-          .iter()
-          .map(|index| index.lock().unwrap())
-          .collect::<Vec<_>>();
-        debug!("Mutex check at line {}", line!());
-        if Arc::strong_count(reference) == 2 &&
-          index_refs.iter().all(|index| Arc::strong_count(index) == 2) &&
-          record.is_persisted() && !record.is_modified() &&
-          record.generation() > generation_limit
-        {
-          (id, Some((record, indices, Cell::new(None))))
-        } else {
-          (id, None)
-        }
+      .map(|(&id, reference)| {
+        if let Ok(record) = reference.try_lock() {
+          let index_refs = index_refs
+            .iter()
+            .filter_map(|index| index.get(&id))
+            .collect::<Vec<_>>();
+          let indices = index_refs
+            .iter()
+            .filter_map(|index| index.try_lock().ok())
+            .collect::<Vec<_>>();
+          if indices.len() == index_refs.len() &&
+            Arc::strong_count(reference) == 2 &&
+            index_refs.iter().all(|index| Arc::strong_count(index) == 2) &&
+            record.is_persisted() && !record.is_modified() &&
+            record.generation() > generation_limit
+          {
+            return (id, Some((record, indices, Cell::new(None))));
+          }
+        };
+        (id, None)
       })
       .collect();
     Self::mark_garbage(&garbage);
