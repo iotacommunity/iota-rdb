@@ -1,12 +1,14 @@
 # README
 
 ## Table of Contents
-* [Checking Out](#checking-out)
+* [Usage](#usage)
 * [Building](#building)
 * [Usage](#usage)
 * [Contributing](#contributing)
+* [License](#license)
+  + [Contribution](#contribution)
 
-## Checking Out
+## Usage
 
 Since we are using git submodules system, additional steps to work with the
 repository are required. To correctly clone the repository you should add
@@ -21,6 +23,16 @@ To correctly pull changes from the upstream, run the following commands:
 ```sh
 $ git pull
 $ git submodule update --init --recursive
+```
+
+Make sure [Docker][docker] and [Docker Compose][docker-compose] are installed.
+
+Edit `docker-compose.yml` file for configuration.
+
+Run the service with the following command:
+
+```sh
+$ docker-compose up --build
 ```
 
 ## Building
@@ -107,7 +119,26 @@ $ rustup run nightly cargo build --features "clippy"
 
 The output should not contain warnings.
 
+## License
+
+Licensed under either of
+
+ * Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or
+   http://www.apache.org/licenses/LICENSE-2.0)
+ * MIT license ([LICENSE-MIT](LICENSE-MIT) or
+   http://opensource.org/licenses/MIT)
+
+at your option.
+
+### Contribution
+
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.
+
 [rust]: https://www.rust-lang.org/
 [rustfmt]: https://github.com/rust-lang-nursery/rustfmt
 [clippy]: https://github.com/rust-lang-nursery/rust-clippy
 [zmq]: https://github.com/zeromq/libzmq
+[docker]: https://www.docker.com/community-edition#/download
+[docker-compose]: https://docs.docker.com/compose/install/
