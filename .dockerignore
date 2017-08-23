@@ -1,0 +1,7 @@
+Dockerfile
+.git*
+*.md
+*.log
+LICENSE*
+target/
+**/*.rs.bk

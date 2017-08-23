@@ -79,4 +79,3 @@ CREATE TABLE `tx` (
   KEY `is_mst_INDEX` (`is_mst`),
   KEY `mst_a_INDEX` (`mst_a`)
 ) ENGINE=InnoDB CHARSET=utf8 KEY_BLOCK_SIZE=2;
-

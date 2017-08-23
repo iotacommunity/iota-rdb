@@ -3,6 +3,7 @@ use std::{error, fmt, num, result};
 #[derive(Debug)]
 pub enum Error {
   ArgNotFound,
+  RetryIntervalParseInt(num::ParseIntError),
   UpdateIntervalParseInt(num::ParseIntError),
   CalculationThreadsParseInt(num::ParseIntError),
   CalculationLimitParseInt(num::ParseIntError),
@@ -17,6 +18,9 @@ impl fmt::Display for Error {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match *self {
       Error::ArgNotFound => write!(f, "Argument not found"),
+      Error::RetryIntervalParseInt(ref err) => {
+        write!(f, "{} (retry-interval)", err)
+      }
       Error::UpdateIntervalParseInt(ref err) => {
         write!(f, "{} (update-interval)", err)
       }
@@ -43,6 +47,7 @@ impl error::Error for Error {
   fn description(&self) -> &str {
     match *self {
       Error::ArgNotFound => "Argument not found",
+      Error::RetryIntervalParseInt(ref err) |
       Error::UpdateIntervalParseInt(ref err) |
       Error::CalculationThreadsParseInt(ref err) |
       Error::CalculationLimitParseInt(ref err) |
@@ -55,6 +60,7 @@ impl error::Error for Error {
   fn cause(&self) -> Option<&error::Error> {
     match *self {
       Error::ArgNotFound | Error::MilestoneStartIndexToTrits => None,
+      Error::RetryIntervalParseInt(ref err) |
       Error::UpdateIntervalParseInt(ref err) |
       Error::CalculationThreadsParseInt(ref err) |
       Error::CalculationLimitParseInt(ref err) |

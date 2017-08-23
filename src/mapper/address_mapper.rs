@@ -13,9 +13,10 @@ pub struct AddressMapper {
 impl Mapper for AddressMapper {
   type Record = AddressRecord;
 
-  fn new(conn: &mut mysql::Conn) -> Result<Self> {
+  fn new(conn: &mut mysql::Conn, retry_interval: u64) -> Result<Self> {
     let counter = Self::init_counter(
       conn,
+      retry_interval,
       r"SELECT id_address FROM address ORDER BY id_address DESC LIMIT 1",
     )?;
     let records = RwLock::new(BTreeMap::new());

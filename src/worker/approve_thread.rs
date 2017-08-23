@@ -7,7 +7,7 @@ use std::collections::{HashSet, VecDeque};
 use std::sync::{mpsc, Arc};
 use std::thread;
 use std::time::{Instant, SystemTime};
-use utils::{DurationUtils, SystemTimeUtils};
+use utils::{DurationUtils, MysqlConnUtils, SystemTimeUtils};
 
 #[derive(Debug)]
 pub enum ApproveJob {
@@ -39,6 +39,7 @@ pub struct MilestoneApproveJob {
 pub struct ApproveThread<'a> {
   pub approve_rx: mpsc::Receiver<ApproveJob>,
   pub mysql_uri: &'a str,
+  pub retry_interval: u64,
   pub transaction_mapper: Arc<TransactionMapper>,
   pub bundle_mapper: Arc<BundleMapper>,
 }
@@ -48,11 +49,11 @@ impl<'a> ApproveThread<'a> {
     let Self {
       approve_rx,
       mysql_uri,
+      retry_interval,
       transaction_mapper,
       bundle_mapper,
     } = self;
-    let mut conn =
-      mysql::Conn::new(mysql_uri).expect("MySQL connection failure");
+    let mut conn = mysql::Conn::new_retry(mysql_uri, retry_interval);
     thread::spawn(move || {
       let transaction_mapper = &*transaction_mapper;
       let bundle_mapper = &*bundle_mapper;

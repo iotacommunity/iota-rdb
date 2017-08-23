@@ -5,7 +5,7 @@ use std::collections::{HashSet, VecDeque};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::Instant;
-use utils::DurationUtils;
+use utils::{DurationUtils, MysqlConnUtils};
 
 #[derive(Debug)]
 pub struct CalculateJob {
@@ -15,6 +15,7 @@ pub struct CalculateJob {
 pub struct CalculateThreads<'a> {
   pub calculate_rx: mpsc::Receiver<CalculateJob>,
   pub mysql_uri: &'a str,
+  pub retry_interval: u64,
   pub calculation_threads: usize,
   pub calculation_limit: usize,
   pub transaction_mapper: Arc<TransactionMapper>,
@@ -25,14 +26,14 @@ impl<'a> CalculateThreads<'a> {
     let Self {
       calculate_rx,
       mysql_uri,
+      retry_interval,
       calculation_threads,
       calculation_limit,
       transaction_mapper,
     } = self;
     let calculate_rx = Arc::new(Mutex::new(calculate_rx));
     for i in 0..calculation_threads {
-      let mut conn =
-        mysql::Conn::new(mysql_uri).expect("MySQL connection failure");
+      let mut conn = mysql::Conn::new_retry(mysql_uri, retry_interval);
       let transaction_mapper = transaction_mapper.clone();
       let calculate_rx = calculate_rx.clone();
       thread::spawn(move || {

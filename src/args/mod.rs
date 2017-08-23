@@ -8,6 +8,7 @@ use utils;
 pub struct Args<'a> {
   pub zmq_uri: &'a str,
   pub mysql_uri: &'a str,
+  pub retry_interval: u64,
   pub update_interval: u64,
   pub calculation_threads: usize,
   pub calculation_limit: usize,
@@ -21,6 +22,11 @@ impl<'a> Args<'a> {
   pub fn parse(matches: &'a ArgMatches<'a>) -> Result<Self> {
     let zmq_uri = matches.value_of("zmq_uri").ok_or(Error::ArgNotFound)?;
     let mysql_uri = matches.value_of("mysql_uri").ok_or(Error::ArgNotFound)?;
+    let retry_interval = matches
+      .value_of("retry_interval")
+      .ok_or(Error::ArgNotFound)?
+      .parse()
+      .map_err(Error::RetryIntervalParseInt)?;
     let update_interval = matches
       .value_of("update_interval")
       .ok_or(Error::ArgNotFound)?
@@ -57,6 +63,7 @@ impl<'a> Args<'a> {
     Ok(Self {
       zmq_uri,
       mysql_uri,
+      retry_interval,
       update_interval,
       calculation_threads,
       calculation_limit,

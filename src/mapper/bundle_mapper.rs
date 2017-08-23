@@ -13,9 +13,10 @@ pub struct BundleMapper {
 impl Mapper for BundleMapper {
   type Record = BundleRecord;
 
-  fn new(conn: &mut mysql::Conn) -> Result<Self> {
+  fn new(conn: &mut mysql::Conn, retry_interval: u64) -> Result<Self> {
     let counter = Self::init_counter(
       conn,
+      retry_interval,
       r"SELECT id_bundle FROM bundle ORDER BY id_bundle DESC LIMIT 1",
     )?;
     let records = RwLock::new(BTreeMap::new());

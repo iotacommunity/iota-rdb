@@ -13,6 +13,8 @@ pub use self::transaction_mapper::TransactionMapper;
 use mysql;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex, RwLock, RwLockWriteGuard};
+use std::thread;
+use std::time::Duration;
 
 pub type Records<T> = BTreeMap<u64, Arc<Mutex<T>>>;
 pub type Hashes = HashMap<String, u64>;
@@ -21,7 +23,7 @@ pub type Index = Option<Vec<u64>>;
 pub trait Mapper: Sized {
   type Record: Record;
 
-  fn new(conn: &mut mysql::Conn) -> Result<Self>;
+  fn new(conn: &mut mysql::Conn, retry_interval: u64) -> Result<Self>;
 
   fn counter(&self) -> &Mutex<u64>;
 
@@ -46,11 +48,28 @@ pub trait Mapper: Sized {
 
   fn init_counter(
     conn: &mut mysql::Conn,
+    retry_interval: u64,
     query: &str,
   ) -> mysql::Result<Mutex<u64>> {
-    conn
-      .first(query)
-      .and_then(|row| row.map_or_else(|| Ok(0), mysql::from_row_opt))
+    let retry_interval = Duration::from_millis(retry_interval);
+    let row;
+    loop {
+      match conn.first(query) {
+        Ok(result) => {
+          row = result;
+          break;
+        }
+        Err(mysql::Error::MySqlError(ref err)) if err.code == 1146 => {
+          warn!("Counter initialization failure: {}. Retrying...", err);
+          thread::sleep(retry_interval);
+        }
+        Err(err) => {
+          return Err(err);
+        }
+      }
+    }
+    row
+      .map_or_else(|| Ok(0), mysql::from_row_opt)
       .map(Mutex::new)
   }
 

@@ -29,6 +29,7 @@ use args::Args;
 use mapper::{AddressMapper, BundleMapper, Mapper, TransactionMapper};
 use std::process::exit;
 use std::sync::{mpsc, Arc};
+use utils::MysqlConnUtils;
 use worker::{ApproveThread, CalculateThreads, InsertThread, SolidateThread,
              UpdateThread, ZmqLoop};
 
@@ -41,6 +42,7 @@ fn main() {
   let Args {
     zmq_uri,
     mysql_uri,
+    retry_interval,
     update_interval,
     calculation_threads,
     calculation_limit,
@@ -63,15 +65,19 @@ fn main() {
   socket.connect(zmq_uri).expect("ZMQ socket connect failure");
   socket.set_subscribe(b"tx ").expect("ZMQ subscribe failure");
 
-  let mut conn = mysql::Conn::new(mysql_uri).expect("MySQL connection failure");
+  let mut conn = mysql::Conn::new_retry(mysql_uri, retry_interval);
   let transaction_mapper = Arc::new(
-    TransactionMapper::new(&mut conn).expect("Transaction mapper failure"),
+    TransactionMapper::new(&mut conn, retry_interval)
+      .expect("Transaction mapper failure"),
   );
   let address_mapper = Arc::new(
-    AddressMapper::new(&mut conn).expect("Address mapper failure"),
+    AddressMapper::new(&mut conn, retry_interval)
+      .expect("Address mapper failure"),
   );
-  let bundle_mapper =
-    Arc::new(BundleMapper::new(&mut conn).expect("Bundle mapper failure"));
+  let bundle_mapper = Arc::new(
+    BundleMapper::new(&mut conn, retry_interval)
+      .expect("Bundle mapper failure"),
+  );
 
   info!("Milestone address: {}", milestone_address);
   info!("Milestone start index string: {}", milestone_start_index);
@@ -85,6 +91,7 @@ fn main() {
     solidate_tx,
     calculate_tx,
     mysql_uri,
+    retry_interval,
     transaction_mapper: transaction_mapper.clone(),
     address_mapper: address_mapper.clone(),
     bundle_mapper: bundle_mapper.clone(),
@@ -93,6 +100,7 @@ fn main() {
   };
   let update_thread = UpdateThread {
     mysql_uri,
+    retry_interval,
     update_interval,
     generation_limit,
     transaction_mapper: transaction_mapper.clone(),
@@ -102,17 +110,20 @@ fn main() {
   let approve_thread = ApproveThread {
     approve_rx,
     mysql_uri,
+    retry_interval,
     transaction_mapper: transaction_mapper.clone(),
     bundle_mapper: bundle_mapper.clone(),
   };
   let solidate_thread = SolidateThread {
     solidate_rx,
     mysql_uri,
+    retry_interval,
     transaction_mapper: transaction_mapper.clone(),
   };
   let calculate_threads = CalculateThreads {
     calculate_rx,
     mysql_uri,
+    retry_interval,
     calculation_threads,
     calculation_limit,
     transaction_mapper: transaction_mapper.clone(),

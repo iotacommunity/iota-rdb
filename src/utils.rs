@@ -1,6 +1,8 @@
 use iota_curl_cpu;
 use iota_sign;
 use iota_trytes;
+use mysql;
+use std::thread;
 use std::time::{Duration, SystemTime, SystemTimeError, UNIX_EPOCH};
 
 pub trait SystemTimeUtils {
@@ -9,6 +11,10 @@ pub trait SystemTimeUtils {
 
 pub trait DurationUtils {
   fn as_milliseconds(&self) -> f64;
+}
+
+pub trait MysqlConnUtils {
+  fn new_retry(uri: &str, retry_interval: u64) -> Self;
 }
 
 impl SystemTimeUtils for SystemTime {
@@ -21,6 +27,32 @@ impl SystemTimeUtils for SystemTime {
 impl DurationUtils for Duration {
   fn as_milliseconds(&self) -> f64 {
     self.as_secs() as f64 * 1000.0 + self.subsec_nanos() as f64 * 1e-6
+  }
+}
+
+impl MysqlConnUtils for mysql::Conn {
+  fn new_retry(uri: &str, retry_interval: u64) -> Self {
+    const CREATE_DB: &str = include_str!("../db/create-db.sql");
+    let retry_interval = Duration::from_millis(retry_interval);
+    let root_uri = format!("{}/?prefer_socket=false", uri);
+    let iota_uri = format!("{}/iota?prefer_socket=false", uri);
+    loop {
+      match mysql::Conn::new(&iota_uri) {
+        Ok(conn) => return conn,
+        Err(mysql::Error::MySqlError(ref err)) if err.code == 1049 => {
+          if let Ok(mut conn) = mysql::Conn::new(&root_uri) {
+            if let Err(err) = conn.query(CREATE_DB) {
+              warn!("MySQL create db failure: {}. Retrying...", err);
+              thread::sleep(retry_interval);
+            }
+          }
+        }
+        Err(err) => {
+          warn!("MySQL connection failure: {}. Retrying...", err);
+          thread::sleep(retry_interval);
+        }
+      }
+    }
   }
 }
 

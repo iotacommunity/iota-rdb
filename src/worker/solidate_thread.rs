@@ -7,7 +7,7 @@ use std::collections::{HashSet, VecDeque};
 use std::sync::{mpsc, Arc};
 use std::thread;
 use std::time::{Instant, SystemTime};
-use utils::{DurationUtils, SystemTimeUtils};
+use utils::{DurationUtils, MysqlConnUtils, SystemTimeUtils};
 
 #[derive(Debug)]
 pub struct SolidateJob {
@@ -18,6 +18,7 @@ pub struct SolidateJob {
 pub struct SolidateThread<'a> {
   pub solidate_rx: mpsc::Receiver<SolidateJob>,
   pub mysql_uri: &'a str,
+  pub retry_interval: u64,
   pub transaction_mapper: Arc<TransactionMapper>,
 }
 
@@ -26,10 +27,10 @@ impl<'a> SolidateThread<'a> {
     let Self {
       solidate_rx,
       mysql_uri,
+      retry_interval,
       transaction_mapper,
     } = self;
-    let mut conn =
-      mysql::Conn::new(mysql_uri).expect("MySQL connection failure");
+    let mut conn = mysql::Conn::new_retry(mysql_uri, retry_interval);
     thread::spawn(move || {
       let transaction_mapper = &*transaction_mapper;
       loop {

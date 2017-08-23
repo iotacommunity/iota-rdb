@@ -4,7 +4,7 @@ use mysql;
 use std::sync::{mpsc, Arc};
 use std::thread;
 use std::time::Instant;
-use utils::{self, DurationUtils};
+use utils::{self, DurationUtils, MysqlConnUtils};
 use worker::{ApproveJob, CalculateJob, SolidateJob};
 
 const HASH_SIZE: usize = 81;
@@ -15,6 +15,7 @@ pub struct InsertThread<'a> {
   pub solidate_tx: mpsc::Sender<SolidateJob>,
   pub calculate_tx: mpsc::Sender<CalculateJob>,
   pub mysql_uri: &'a str,
+  pub retry_interval: u64,
   pub transaction_mapper: Arc<TransactionMapper>,
   pub address_mapper: Arc<AddressMapper>,
   pub bundle_mapper: Arc<BundleMapper>,
@@ -30,6 +31,7 @@ impl<'a> InsertThread<'a> {
       solidate_tx,
       calculate_tx,
       mysql_uri,
+      retry_interval,
       transaction_mapper,
       address_mapper,
       bundle_mapper,
@@ -37,8 +39,7 @@ impl<'a> InsertThread<'a> {
       milestone_start_index,
     } = self;
     let milestone_address = milestone_address.to_owned();
-    let mut conn =
-      mysql::Conn::new(mysql_uri).expect("MySQL connection failure");
+    let mut conn = mysql::Conn::new_retry(mysql_uri, retry_interval);
     let null_hash = utils::trits_string(0, HASH_SIZE)
       .expect("Can't convert null_hash to trits");
     thread::spawn(move || {

@@ -1,0 +1,39 @@
+version: '3.2'
+
+services:
+  iota-rdb:
+    build: .
+    command: [
+      "--zmq", "tcp://34.250.248.76:5556",
+      "--mysql", "mysql://root:password@mysql:3306",
+      "--milestone-address",
+      "XNZBYAST9BETSDNOVQKKTBECYIPMF9IPOZRWUPFQ\
+       GVH9HJW9NDSQVIPVBWU9YKECRYGDSJXYMZGHZDXCA",
+      "--milestone-start-index", "1",
+      "--calculation-limit", "10000",
+      "--calculation-threads", "4",
+      "--generation-limit", "6",
+      "--retry-interval", "1000",
+      "--update-interval", "10000",
+    ]
+    environment:
+      RUST_BACKTRACE: 1
+    networks:
+      - mysql
+
+  mysql:
+    image: mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: 'password'
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql:/var/lib/mysql
+    networks:
+      - mysql
+
+volumes:
+  mysql:
+
+networks:
+  mysql:

@@ -1,5 +1,6 @@
 use clap::{App, Arg};
 
+const DEFAULT_RETRY_INTERVAL: &str = "1000";
 const DEFAULT_UPDATE_INTERVAL: &str = "1000";
 const DEFAULT_CALCULATION_THREADS: &str = "1";
 const DEFAULT_CALCULATION_LIMIT: &str = "1000";
@@ -29,6 +30,15 @@ pub fn build<'a, 'b>() -> App<'a, 'b> {
         .value_name("URI")
         .required(true)
         .help("MySQL destination server URI"),
+    )
+    .arg(
+      Arg::with_name("retry_interval")
+        .short("r")
+        .long("retry-interval")
+        .takes_value(true)
+        .value_name("INTERVAL")
+        .default_value(DEFAULT_RETRY_INTERVAL)
+        .help("MySQL connect retry interval in milliseconds"),
     )
     .arg(
       Arg::with_name("update_interval")

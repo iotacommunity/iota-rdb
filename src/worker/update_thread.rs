@@ -4,10 +4,11 @@ use mysql;
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
-use utils::DurationUtils;
+use utils::{DurationUtils, MysqlConnUtils};
 
 pub struct UpdateThread<'a> {
   pub mysql_uri: &'a str,
+  pub retry_interval: u64,
   pub update_interval: u64,
   pub generation_limit: usize,
   pub transaction_mapper: Arc<TransactionMapper>,
@@ -19,6 +20,7 @@ impl<'a> UpdateThread<'a> {
   pub fn spawn(self) {
     let Self {
       mysql_uri,
+      retry_interval,
       update_interval,
       generation_limit,
       transaction_mapper,
@@ -26,8 +28,7 @@ impl<'a> UpdateThread<'a> {
       bundle_mapper,
     } = self;
     let update_interval = Duration::from_millis(update_interval);
-    let mut conn =
-      mysql::Conn::new(mysql_uri).expect("MySQL connection failure");
+    let mut conn = mysql::Conn::new_retry(mysql_uri, retry_interval);
     thread::spawn(move || {
       let transaction_mapper = &*transaction_mapper;
       let address_mapper = &*address_mapper;

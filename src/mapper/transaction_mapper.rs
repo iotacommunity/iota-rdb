@@ -17,9 +17,10 @@ type FetchManyResult = Result<
 impl Mapper for TransactionMapper {
   type Record = TransactionRecord;
 
-  fn new(conn: &mut mysql::Conn) -> Result<Self> {
+  fn new(conn: &mut mysql::Conn, retry_interval: u64) -> Result<Self> {
     let counter = Self::init_counter(
       conn,
+      retry_interval,
       r"SELECT id_tx FROM tx ORDER BY id_tx DESC LIMIT 1",
     )?;
     let records = RwLock::new(BTreeMap::new());
