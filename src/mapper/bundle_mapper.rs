@@ -1,5 +1,4 @@
-use super::{BundleRecord, Garbage, Hashes, Index, Mapper, Record, Records,
-            Result};
+use super::{BundleRecord, Hashes, Index, Mapper, Record, Records, Result};
 use mysql;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex, RwLock, RwLockWriteGuard};
@@ -57,8 +56,6 @@ impl Mapper for BundleMapper {
     };
     indices[0].insert(record.id(), Arc::new(Mutex::new(inner)));
   }
-
-  fn mark_garbage(_garbage: &Garbage<BundleRecord>) {}
 }
 
 impl BundleMapper {

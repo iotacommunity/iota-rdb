@@ -11,23 +11,12 @@ pub use self::record::{AddressRecord, BundleRecord, Record, TransactionRecord};
 pub use self::transaction_mapper::TransactionMapper;
 
 use mysql;
-use std::cell::Cell;
 use std::collections::{BTreeMap, HashMap};
-use std::sync::{Arc, Mutex, MutexGuard, RwLock, RwLockWriteGuard};
+use std::sync::{Arc, Mutex, RwLock, RwLockWriteGuard};
 
 pub type Records<T> = BTreeMap<u64, Arc<Mutex<T>>>;
 pub type Hashes = HashMap<String, u64>;
 pub type Index = Option<Vec<u64>>;
-pub type Garbage<'a, T> = HashMap<
-  u64,
-  Option<
-    (
-      MutexGuard<'a, T>,
-      Vec<MutexGuard<'a, Index>>,
-      Cell<Option<bool>>,
-    ),
-  >,
->;
 
 pub trait Mapper: Sized {
   type Record: Record;
@@ -46,8 +35,6 @@ pub trait Mapper: Sized {
     indices: &mut [RwLockWriteGuard<Records<Index>>],
     record: &Self::Record,
   );
-
-  fn mark_garbage(garbage: &Garbage<Self::Record>);
 
   fn lock_indices(&self) -> Vec<RwLockWriteGuard<Records<Index>>> {
     self
@@ -188,50 +175,43 @@ pub trait Mapper: Sized {
     debug!("Mutex check at line {}", line!());
     let mut indices = self.lock_indices();
     debug!("Mutex check at line {}", line!());
-    let record_refs = records
-      .iter()
-      .map(|(&k, v)| (k, v.clone()))
-      .collect::<BTreeMap<_, _>>();
+    let record_refs = records.values().cloned().collect::<Vec<_>>();
     let index_refs = indices
       .iter()
       .map(|i| i.iter().map(|(&k, v)| (k, v.clone())).collect())
       .collect::<Vec<HashMap<_, _>>>();
-    let garbage: Garbage<Self::Record> = record_refs
+    record_refs
       .iter()
-      .map(|(&id, reference)| {
-        if let Ok(record) = reference.try_lock() {
-          let index_refs = index_refs
-            .iter()
-            .filter_map(|index| index.get(&id))
-            .collect::<Vec<_>>();
-          let indices = index_refs
-            .iter()
-            .filter_map(|index| index.try_lock().ok())
-            .collect::<Vec<_>>();
-          if indices.len() == index_refs.len() &&
-            Arc::strong_count(reference) == 2 &&
-            index_refs.iter().all(|index| Arc::strong_count(index) == 2) &&
-            record.is_persisted() && !record.is_modified() &&
-            record.generation() > generation_limit
-          {
-            return (id, Some((record, indices, Cell::new(None))));
-          }
-        };
-        (id, None)
+      .filter_map(|reference| {
+        reference.try_lock().ok().map(|record| (record, reference))
       })
-      .collect();
-    Self::mark_garbage(&garbage);
-    for value in garbage.values() {
-      if let Some((ref record, _, ref mark)) = *value {
-        if let Some(true) = mark.get() {
-          records.remove(&record.id());
-          hashes.remove(record.hash());
-          for index in &mut indices {
-            index.remove(&record.id());
-          }
+      .filter_map(|(record, reference)| {
+        let index_refs = index_refs
+          .iter()
+          .filter_map(|index| index.get(&record.id()))
+          .collect::<Vec<_>>();
+        let indices = index_refs
+          .iter()
+          .filter_map(|index| index.try_lock().ok())
+          .collect::<Vec<_>>();
+        if indices.len() == index_refs.len() &&
+          Arc::strong_count(reference) == 2 &&
+          index_refs.iter().all(|index| Arc::strong_count(index) == 2) &&
+          record.is_persisted() && !record.is_modified() &&
+          record.generation() > generation_limit
+        {
+          Some((record, indices))
+        } else {
+          None
         }
-      }
-    }
+      })
+      .for_each(|(record, _)| {
+        records.remove(&record.id());
+        hashes.remove(record.hash());
+        for index in &mut indices {
+          index.remove(&record.id());
+        }
+      });
     record_refs.len() - records.len()
   }
 }

@@ -1,5 +1,4 @@
-use super::{Garbage, Hashes, Index, Mapper, Record, Records, Result,
-            TransactionRecord};
+use super::{Hashes, Index, Mapper, Record, Records, Result, TransactionRecord};
 use mysql;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex, MutexGuard, RwLock, RwLockWriteGuard};
@@ -75,16 +74,6 @@ impl Mapper for TransactionMapper {
         let mut index = index.lock().unwrap();
         debug!("Mutex check at line {}", line!());
         record.fill_index(&mut index);
-      }
-    }
-  }
-
-  fn mark_garbage(garbage: &Garbage<TransactionRecord>) {
-    for id in garbage.keys().cloned().collect::<Vec<_>>() {
-      if let Some(&Some((_, _, ref mark))) = garbage.get(&id) {
-        if mark.get().is_none() {
-          can_prune(garbage, id);
-        }
       }
     }
   }
@@ -256,29 +245,4 @@ impl TransactionMapper {
       }
     })
   }
-}
-
-fn can_prune(garbage: &Garbage<TransactionRecord>, id: u64) -> bool {
-  garbage
-    .get(&id)
-    .map(|data| {
-      data
-        .as_ref()
-        .map(|&(ref record, _, ref mark)| {
-          mark.get().unwrap_or_else(|| {
-            let prune = record
-              .id_trunk()
-              .map(|id_trunk| can_prune(garbage, id_trunk))
-              .unwrap_or(true) &&
-              record
-                .id_branch()
-                .map(|id_branch| can_prune(garbage, id_branch))
-                .unwrap_or(true);
-            mark.set(Some(prune));
-            prune
-          })
-        })
-        .unwrap_or(false)
-    })
-    .unwrap_or(true)
 }

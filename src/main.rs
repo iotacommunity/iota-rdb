@@ -1,5 +1,6 @@
 #![cfg_attr(feature = "clippy", feature(plugin))]
 #![cfg_attr(feature = "clippy", plugin(clippy))]
+#![feature(iterator_for_each)]
 
 #[macro_use]
 extern crate clap;

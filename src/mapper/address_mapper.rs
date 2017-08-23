@@ -1,4 +1,4 @@
-use super::{AddressRecord, Garbage, Hashes, Index, Mapper, Records, Result};
+use super::{AddressRecord, Hashes, Index, Mapper, Records, Result};
 use mysql;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Mutex, RwLock, RwLockWriteGuard};
@@ -50,6 +50,4 @@ impl Mapper for AddressMapper {
     _record: &AddressRecord,
   ) {
   }
-
-  fn mark_garbage(_garbage: &Garbage<AddressRecord>) {}
 }
