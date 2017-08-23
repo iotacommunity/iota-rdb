@@ -8,7 +8,7 @@ pub use self::address_record::AddressRecord;
 pub use self::bundle_record::BundleRecord;
 pub use self::transaction_record::TransactionRecord;
 
-use super::{Error, Result};
+use super::{Error, Index, Result};
 use mysql;
 
 pub trait Record: Sized {
@@ -72,7 +72,7 @@ pub trait Record: Sized {
     Ok(())
   }
 
-  fn fill_index(&self, index: &mut Option<Vec<u64>>) {
+  fn fill_index(&self, index: &mut Index) {
     if let Some(ref mut vec) = *index {
       if let Err(i) = vec.binary_search(&self.id()) {
         vec.insert(i, self.id());

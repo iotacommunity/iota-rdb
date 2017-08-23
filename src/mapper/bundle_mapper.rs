@@ -60,10 +60,7 @@ impl Mapper for BundleMapper {
 }
 
 impl BundleMapper {
-  pub fn transaction_index(
-    &self,
-    id: u64,
-  ) -> Option<Arc<Mutex<Option<Vec<u64>>>>> {
+  pub fn transaction_index(&self, id: u64) -> Option<Arc<Mutex<Index>>> {
     debug!("Mutex check at line {}", line!());
     let transactions = self.indices[0].read().unwrap();
     debug!("Mutex check at line {}", line!());

@@ -1,4 +1,4 @@
-use super::super::{Error, Record, Result};
+use super::super::{Error, Index, Record, Result};
 use mysql;
 use solid::Solid;
 
@@ -321,11 +321,7 @@ impl TransactionRecord {
     self.set_weight(weight + value);
   }
 
-  pub fn set_id_trunk(
-    &mut self,
-    id_trunk: u64,
-    trunk_index: &mut Option<Vec<u64>>,
-  ) {
+  pub fn set_id_trunk(&mut self, id_trunk: u64, trunk_index: &mut Index) {
     match self.id_trunk {
       Some(_) => panic!("`id_trunk` is immutable"),
       None => {
@@ -336,11 +332,7 @@ impl TransactionRecord {
     }
   }
 
-  pub fn set_id_branch(
-    &mut self,
-    id_branch: u64,
-    branch_index: &mut Option<Vec<u64>>,
-  ) {
+  pub fn set_id_branch(&mut self, id_branch: u64, branch_index: &mut Index) {
     match self.id_branch {
       Some(_) => panic!("`id_branch` is immutable"),
       None => {
@@ -361,11 +353,7 @@ impl TransactionRecord {
     }
   }
 
-  pub fn set_id_bundle(
-    &mut self,
-    id_bundle: u64,
-    bundle_index: &mut Option<Vec<u64>>,
-  ) {
+  pub fn set_id_bundle(&mut self, id_bundle: u64, bundle_index: &mut Index) {
     match self.id_bundle {
       Some(_) => panic!("`id_bundle` is immutable"),
       None => {

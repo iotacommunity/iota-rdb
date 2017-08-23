@@ -156,14 +156,14 @@ impl TransactionMapper {
     Ok(output)
   }
 
-  pub fn trunk_index(&self, id: u64) -> Option<Arc<Mutex<Option<Vec<u64>>>>> {
+  pub fn trunk_index(&self, id: u64) -> Option<Arc<Mutex<Index>>> {
     debug!("Mutex check at line {}", line!());
     let trunks = self.indices[0].read().unwrap();
     debug!("Mutex check at line {}", line!());
     trunks.get(&id).cloned()
   }
 
-  pub fn branch_index(&self, id: u64) -> Option<Arc<Mutex<Option<Vec<u64>>>>> {
+  pub fn branch_index(&self, id: u64) -> Option<Arc<Mutex<Index>>> {
     debug!("Mutex check at line {}", line!());
     let branches = self.indices[1].read().unwrap();
     debug!("Mutex check at line {}", line!());
@@ -174,8 +174,8 @@ impl TransactionMapper {
     &self,
     conn: &mut mysql::Conn,
     id: u64,
-    index: &'a Mutex<Option<Vec<u64>>>,
-  ) -> Result<MutexGuard<'a, Option<Vec<u64>>>> {
+    index: &'a Mutex<Index>,
+  ) -> Result<MutexGuard<'a, Index>> {
     self.fetch_index(conn, id, index, TransactionRecord::find_trunk)
   }
 
@@ -183,8 +183,8 @@ impl TransactionMapper {
     &self,
     conn: &mut mysql::Conn,
     id: u64,
-    index: &'a Mutex<Option<Vec<u64>>>,
-  ) -> Result<MutexGuard<'a, Option<Vec<u64>>>> {
+    index: &'a Mutex<Index>,
+  ) -> Result<MutexGuard<'a, Index>> {
     self.fetch_index(conn, id, index, TransactionRecord::find_branch)
   }
 
@@ -192,8 +192,8 @@ impl TransactionMapper {
     &self,
     conn: &mut mysql::Conn,
     id: u64,
-    index: &'a Mutex<Option<Vec<u64>>>,
-  ) -> Result<MutexGuard<'a, Option<Vec<u64>>>> {
+    index: &'a Mutex<Index>,
+  ) -> Result<MutexGuard<'a, Index>> {
     self.fetch_index(conn, id, index, TransactionRecord::find_bundle)
   }
 
@@ -201,9 +201,9 @@ impl TransactionMapper {
     &self,
     conn: &mut mysql::Conn,
     id: u64,
-    index: &'a Mutex<Option<Vec<u64>>>,
+    index: &'a Mutex<Index>,
     f: F,
-  ) -> Result<MutexGuard<'a, Option<Vec<u64>>>>
+  ) -> Result<MutexGuard<'a, Index>>
   where
     F: FnOnce(&mut mysql::Conn, u64)
       -> Result<Vec<TransactionRecord>>,
