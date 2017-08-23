@@ -3,7 +3,6 @@
 ## Table of Contents
 * [Usage](#usage)
 * [Building](#building)
-* [Usage](#usage)
 * [Contributing](#contributing)
 * [License](#license)
   + [Contribution](#contribution)
@@ -69,25 +68,6 @@ $ rustup run nightly cargo build --release
 ```
 
 The binary will be located at `target/release/iota-rdb`.
-
-## Usage
-
-To run the program it is required to pass ZeroMQ and MySQL addresses as follows:
-
-```sh
-$ iota-rdb \
-    --zmq 'tcp://127.0.0.1:5556' \
-    --mysql 'mysql://root:password@127.0.0.1:3306/iota' \
-    --write-threads 4 \
-    --approve-threads 4 \
-    --solidate-threads 4
-```
-
-You can view available options by running with `--help` argument:
-
-```sh
-$ iota-rdb --help
-```
 
 ## Contributing
 
