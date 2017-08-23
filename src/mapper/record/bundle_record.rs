@@ -8,18 +8,14 @@ pub struct BundleRecord {
   modified: bool,
   bundle: String,
   id_bundle: u64,
-  created: f64,
-  size: i32,
-  confirmed: f64,
+  is_mst: bool,
 }
 
 const SELECT_QUERY: &str = r#"
   SELECT
     bundle,
     id_bundle,
-    created,
-    size,
-    confirmed
+    is_mst
   FROM bundle
 "#;
 
@@ -34,23 +30,17 @@ impl Record for BundleRecord {
     INSERT INTO bundle (
       bundle,
       id_bundle,
-      created,
-      size,
-      confirmed
+      is_mst
     ) VALUES (
       :bundle,
       :id_bundle,
-      :created,
-      :size,
-      :confirmed
+      :is_mst
     )
   "#;
 
   const UPDATE_QUERY: &'static str = r#"
     UPDATE bundle SET
-      created = :created,
-      size = :size,
-      confirmed = :confirmed
+      is_mst = :is_mst
     WHERE id_bundle = :id_bundle
   "#;
 
@@ -61,9 +51,7 @@ impl Record for BundleRecord {
       modified: false,
       bundle: row.take_opt("bundle").ok_or(Error::ColumnNotFound)??,
       id_bundle: row.take_opt("id_bundle").ok_or(Error::ColumnNotFound)??,
-      created: row.take_opt("created").unwrap_or_else(|| Ok(0.0))?,
-      size: row.take_opt("size").unwrap_or_else(|| Ok(0))?,
-      confirmed: row.take_opt("confirmed").unwrap_or_else(|| Ok(0.0))?,
+      is_mst: row.take_opt("is_mst").unwrap_or_else(|| Ok(false))?,
     })
   }
 
@@ -71,9 +59,7 @@ impl Record for BundleRecord {
     params!{
       "bundle" => self.bundle.clone(),
       "id_bundle" => self.id_bundle,
-      "created" => self.created,
-      "size" => self.size,
-      "confirmed" => self.confirmed,
+      "is_mst" => self.is_mst,
     }
   }
 
@@ -89,20 +75,16 @@ impl Record for BundleRecord {
 impl BundleRecord {
   impl_getter!(bundle, &str);
   impl_getter!(id_bundle, u64);
-  impl_accessors!(created, set_created, f64);
-  impl_accessors!(size, set_size, i32);
-  impl_accessors!(confirmed, set_confirmed, f64);
+  impl_accessors!(is_mst, set_is_mst, bool);
 
-  pub fn new(id_bundle: u64, bundle: String, size: i32, created: f64) -> Self {
+  pub fn new(id_bundle: u64, bundle: String) -> Self {
     Self {
       generation: 0,
       persisted: false,
       modified: true,
       bundle,
       id_bundle,
-      created,
-      size,
-      confirmed: 0.0,
+      is_mst: false,
     }
   }
 }

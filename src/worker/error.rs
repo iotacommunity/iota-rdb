@@ -8,6 +8,7 @@ pub enum Error {
   Message(message::Error),
   Mapper(mapper::Error),
   SystemTime(time::SystemTimeError),
+  Mysql(mysql::Error),
 }
 
 pub type Result<T> = result::Result<T, Error>;
@@ -18,6 +19,7 @@ impl fmt::Display for Error {
       Error::Message(ref err) => write!(f, "Message error: {}", err),
       Error::Mapper(ref err) => write!(f, "Mapper error: {}", err),
       Error::SystemTime(ref err) => write!(f, "SystemTime error: {}", err),
+      Error::Mysql(ref err) => write!(f, "MySQL error: {}", err),
     }
   }
 }
@@ -28,6 +30,7 @@ impl error::Error for Error {
       Error::Message(ref err) => err.description(),
       Error::Mapper(ref err) => err.description(),
       Error::SystemTime(ref err) => err.description(),
+      Error::Mysql(ref err) => err.description(),
     }
   }
 
@@ -36,6 +39,7 @@ impl error::Error for Error {
       Error::Message(ref err) => Some(err),
       Error::Mapper(ref err) => Some(err),
       Error::SystemTime(ref err) => Some(err),
+      Error::Mysql(ref err) => Some(err),
     }
   }
 }
@@ -60,6 +64,6 @@ impl From<time::SystemTimeError> for Error {
 
 impl From<mysql::Error> for Error {
   fn from(err: mysql::Error) -> Error {
-    Error::Mapper(mapper::Error::from(err))
+    Error::Mysql(err)
   }
 }

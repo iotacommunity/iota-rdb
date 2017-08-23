@@ -7,10 +7,13 @@ use std::thread;
 use std::time::Instant;
 use utils::DurationUtils;
 
-pub type CalculateMessage = u64;
+#[derive(Debug)]
+pub struct CalculateJob {
+  pivot_id: u64,
+}
 
 pub struct CalculateThreads<'a> {
-  pub calculate_rx: mpsc::Receiver<CalculateMessage>,
+  pub calculate_rx: mpsc::Receiver<CalculateJob>,
   pub mysql_uri: &'a str,
   pub calculation_threads: usize,
   pub calculation_limit: usize,
@@ -36,7 +39,7 @@ impl<'a> CalculateThreads<'a> {
         let transaction_mapper = &*transaction_mapper;
         let calculate_rx = &*calculate_rx;
         loop {
-          let message = {
+          let job = {
             debug!("Mutex check at line {}", line!());
             let rx = calculate_rx.lock().unwrap();
             debug!("Mutex check at line {}", line!());
@@ -44,11 +47,11 @@ impl<'a> CalculateThreads<'a> {
           };
           let duration = Instant::now();
           let result =
-            perform(&mut conn, transaction_mapper, calculation_limit, &message);
+            job.perform(&mut conn, transaction_mapper, calculation_limit);
           let duration = duration.elapsed().as_milliseconds();
           match result {
             Ok(()) => {
-              info!("#{} {:.3}ms {:?}", i, duration, message);
+              info!("#{} {:.3}ms {:?}", i, duration, job);
             }
             Err(err) => {
               error!("#{} {:.3}ms {}", i, duration, err);
@@ -60,21 +63,27 @@ impl<'a> CalculateThreads<'a> {
   }
 }
 
-fn perform(
-  conn: &mut mysql::Conn,
-  transaction_mapper: &TransactionMapper,
-  calculation_limit: usize,
-  &pivot_id: &CalculateMessage,
-) -> Result<()> {
-  let weight = calculate_front(conn, transaction_mapper, pivot_id)?;
-  calculate_back(
-    conn,
-    transaction_mapper,
-    calculation_limit,
-    pivot_id,
-    weight,
-  )?;
-  Ok(())
+impl CalculateJob {
+  pub fn new(pivot_id: u64) -> Self {
+    Self { pivot_id }
+  }
+
+  pub fn perform(
+    &self,
+    conn: &mut mysql::Conn,
+    transaction_mapper: &TransactionMapper,
+    calculation_limit: usize,
+  ) -> Result<()> {
+    let weight = calculate_front(conn, transaction_mapper, self.pivot_id)?;
+    calculate_back(
+      conn,
+      transaction_mapper,
+      calculation_limit,
+      self.pivot_id,
+      weight,
+    )?;
+    Ok(())
+  }
 }
 
 fn calculate_front(

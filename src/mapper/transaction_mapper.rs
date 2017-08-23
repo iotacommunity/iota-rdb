@@ -66,7 +66,7 @@ impl Mapper for TransactionMapper {
         debug!("Mutex check at line {}", line!());
         let mut index = index.lock().unwrap();
         debug!("Mutex check at line {}", line!());
-        insert_ref(&mut index, record.id());
+        record.fill_index(&mut index);
       }
     }
     if let Some(id_branch) = record.id_branch() {
@@ -74,7 +74,7 @@ impl Mapper for TransactionMapper {
         debug!("Mutex check at line {}", line!());
         let mut index = index.lock().unwrap();
         debug!("Mutex check at line {}", line!());
-        insert_ref(&mut index, record.id());
+        record.fill_index(&mut index);
       }
     }
   }
@@ -91,34 +91,6 @@ impl Mapper for TransactionMapper {
 }
 
 impl TransactionMapper {
-  pub fn set_id_trunk(
-    index: &mut Option<Vec<u64>>,
-    record: &mut TransactionRecord,
-    id_trunk: u64,
-  ) {
-    match record.id_trunk() {
-      Some(_) => panic!("`id_trunk` is immutable"),
-      None => {
-        insert_ref(index, record.id());
-        record.set_id_trunk(Some(id_trunk));
-      }
-    }
-  }
-
-  pub fn set_id_branch(
-    index: &mut Option<Vec<u64>>,
-    record: &mut TransactionRecord,
-    id_branch: u64,
-  ) {
-    match record.id_branch() {
-      Some(_) => panic!("`id_branch` is immutable"),
-      None => {
-        insert_ref(index, record.id());
-        record.set_id_branch(Some(id_branch));
-      }
-    }
-  }
-
   pub fn fetch_many(
     &self,
     conn: &mut mysql::Conn,
@@ -214,7 +186,7 @@ impl TransactionMapper {
     id: u64,
     index: &'a Mutex<Option<Vec<u64>>>,
   ) -> Result<MutexGuard<'a, Option<Vec<u64>>>> {
-    self.fetch_children(conn, id, index, TransactionRecord::find_trunk)
+    self.fetch_index(conn, id, index, TransactionRecord::find_trunk)
   }
 
   pub fn fetch_branch<'a>(
@@ -223,10 +195,19 @@ impl TransactionMapper {
     id: u64,
     index: &'a Mutex<Option<Vec<u64>>>,
   ) -> Result<MutexGuard<'a, Option<Vec<u64>>>> {
-    self.fetch_children(conn, id, index, TransactionRecord::find_branch)
+    self.fetch_index(conn, id, index, TransactionRecord::find_branch)
   }
 
-  fn fetch_children<'a, F>(
+  pub fn fetch_bundle<'a>(
+    &self,
+    conn: &mut mysql::Conn,
+    id: u64,
+    index: &'a Mutex<Option<Vec<u64>>>,
+  ) -> Result<MutexGuard<'a, Option<Vec<u64>>>> {
+    self.fetch_index(conn, id, index, TransactionRecord::find_bundle)
+  }
+
+  fn fetch_index<'a, F>(
     &self,
     conn: &mut mysql::Conn,
     id: u64,
@@ -274,14 +255,6 @@ impl TransactionMapper {
         }
       }
     })
-  }
-}
-
-fn insert_ref(index: &mut Option<Vec<u64>>, id: u64) {
-  if let Some(ref mut vec) = *index {
-    if let Err(i) = vec.binary_search(&id) {
-      vec.insert(i, id);
-    }
   }
 }
 

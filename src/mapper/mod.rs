@@ -120,7 +120,7 @@ pub trait Mapper: Sized {
     conn: &mut mysql::Conn,
     hash: &str,
     f: T,
-  ) -> Result<Arc<Mutex<Self::Record>>>
+  ) -> Result<(u64, Arc<Mutex<Self::Record>>)>
   where
     T: FnOnce(u64) -> Result<Self::Record>,
   {
@@ -130,7 +130,9 @@ pub trait Mapper: Sized {
       debug!("Mutex check at line {}", line!());
       let hashes = self.hashes().read().unwrap();
       debug!("Mutex check at line {}", line!());
-      hashes.get(hash).and_then(|id| records.get(id)).cloned()
+      hashes
+        .get(hash)
+        .and_then(|&id| records.get(&id).map(|record| (id, record.clone())))
     };
     cached.map(Ok).unwrap_or_else(|| {
       Self::Record::find_by_hash(conn, hash).and_then(|record| {
@@ -142,14 +144,13 @@ pub trait Mapper: Sized {
         let mut indices = self.lock_indices();
         debug!("Mutex check at line {}", line!());
         record.map_or_else(|| f(self.next_id()), Ok).map(|record| {
-          records
-            .entry(record.id())
-            .or_insert_with(|| {
-              hashes.insert(record.hash().to_owned(), record.id());
-              Self::fill_indices(&mut indices, &record);
-              Arc::new(Mutex::new(record))
-            })
-            .clone()
+          let id = record.id();
+          let record = records.entry(id).or_insert_with(|| {
+            hashes.insert(record.hash().to_owned(), id);
+            Self::fill_indices(&mut indices, &record);
+            Arc::new(Mutex::new(record))
+          });
+          (id, record.clone())
         })
       })
     })

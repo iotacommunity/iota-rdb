@@ -23,13 +23,10 @@ DROP TABLE IF EXISTS `bundle`;
 CREATE TABLE `bundle` (
   `id_bundle` int(11) NOT NULL UNIQUE,
   `bundle` char(81) NOT NULL,
-  `size` int(11) NOT NULL DEFAULT '0',
-  `created` double DEFAULT NULL,
-  `confirmed` double DEFAULT NULL,
+  `is_mst` char(1) DEFAULT '0',
   PRIMARY KEY (`id_bundle`),
   KEY `bundle_INDEX` (`bundle`),
-  KEY `created_INDEX` (`created`),
-  KEY `confirmed_INDEX` (`confirmed`)
+  KEY `is_mst_INDEX` (`is_mst`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 --

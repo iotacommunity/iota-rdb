@@ -20,6 +20,26 @@ pub trait Record: Sized {
 
   fn from_row(row: &mut mysql::Row) -> Result<Self>;
 
+  fn to_params(&self) -> Vec<(String, mysql::Value)>;
+
+  fn generation(&self) -> usize;
+
+  fn is_persisted(&self) -> bool;
+
+  fn is_modified(&self) -> bool;
+
+  fn set_persisted(&mut self, value: bool);
+
+  fn set_modified(&mut self);
+
+  fn set_not_modified(&mut self);
+
+  fn advance_generation(&mut self);
+
+  fn id(&self) -> u64;
+
+  fn hash(&self) -> &str;
+
   fn find_by_id(conn: &mut mysql::Conn, id: u64) -> Result<Self> {
     Ok(conn
       .first_exec(
@@ -52,23 +72,11 @@ pub trait Record: Sized {
     Ok(())
   }
 
-  fn to_params(&self) -> Vec<(String, mysql::Value)>;
-
-  fn generation(&self) -> usize;
-
-  fn is_persisted(&self) -> bool;
-
-  fn is_modified(&self) -> bool;
-
-  fn set_persisted(&mut self, value: bool);
-
-  fn set_modified(&mut self);
-
-  fn set_not_modified(&mut self);
-
-  fn advance_generation(&mut self);
-
-  fn id(&self) -> u64;
-
-  fn hash(&self) -> &str;
+  fn fill_index(&self, index: &mut Option<Vec<u64>>) {
+    if let Some(ref mut vec) = *index {
+      if let Err(i) = vec.binary_search(&self.id()) {
+        vec.insert(i, self.id());
+      }
+    }
+  }
 }

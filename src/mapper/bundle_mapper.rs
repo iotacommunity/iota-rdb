@@ -1,13 +1,14 @@
-use super::{BundleRecord, Garbage, Hashes, Index, Mapper, Records, Result};
+use super::{BundleRecord, Garbage, Hashes, Index, Mapper, Record, Records,
+            Result};
 use mysql;
 use std::collections::{BTreeMap, HashMap};
-use std::sync::{Mutex, RwLock, RwLockWriteGuard};
+use std::sync::{Arc, Mutex, RwLock, RwLockWriteGuard};
 
 pub struct BundleMapper {
   counter: Mutex<u64>,
   records: RwLock<Records<BundleRecord>>,
   hashes: RwLock<Hashes>,
-  indices: [RwLock<Records<Index>>; 0],
+  indices: [RwLock<Records<Index>>; 1],
 }
 
 impl Mapper for BundleMapper {
@@ -20,7 +21,7 @@ impl Mapper for BundleMapper {
     )?;
     let records = RwLock::new(BTreeMap::new());
     let hashes = RwLock::new(HashMap::new());
-    let indices = [];
+    let indices = [RwLock::new(BTreeMap::new())];
     Ok(Self {
       counter,
       records,
@@ -46,10 +47,28 @@ impl Mapper for BundleMapper {
   }
 
   fn fill_indices(
-    _indices: &mut [RwLockWriteGuard<Records<Index>>],
-    _record: &BundleRecord,
+    indices: &mut [RwLockWriteGuard<Records<Index>>],
+    record: &BundleRecord,
   ) {
+    let inner = if record.is_persisted() {
+      None
+    } else {
+      Some(Vec::new())
+    };
+    indices[0].insert(record.id(), Arc::new(Mutex::new(inner)));
   }
 
   fn mark_garbage(_garbage: &Garbage<BundleRecord>) {}
+}
+
+impl BundleMapper {
+  pub fn transaction_index(
+    &self,
+    id: u64,
+  ) -> Option<Arc<Mutex<Option<Vec<u64>>>>> {
+    debug!("Mutex check at line {}", line!());
+    let transactions = self.indices[0].read().unwrap();
+    debug!("Mutex check at line {}", line!());
+    transactions.get(&id).cloned()
+  }
 }

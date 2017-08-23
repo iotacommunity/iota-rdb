@@ -11,8 +11,8 @@ pub struct TransactionRecord {
   id_tx: u64,
   id_trunk: Option<u64>,
   id_branch: Option<u64>,
-  id_address: u64,
-  id_bundle: u64,
+  id_address: Option<u64>,
+  id_bundle: Option<u64>,
   tag: String,
   value: i64,
   timestamp: f64,
@@ -57,6 +57,7 @@ const WHERE_HASH_TWO: &str = r"WHERE hash IN (?, ?)";
 const WHERE_HASH_THREE: &str = r"WHERE hash IN (?, ?, ?)";
 const WHERE_ID_TRUNK: &str = r"WHERE id_trunk = ?";
 const WHERE_ID_BRANCH: &str = r"WHERE id_branch = ?";
+const WHERE_ID_BUNDLE: &str = r"WHERE id_bundle = ?";
 
 impl Record for TransactionRecord {
   impl_record!();
@@ -138,8 +139,8 @@ impl Record for TransactionRecord {
       id_tx: row.take_opt("id_tx").ok_or(Error::ColumnNotFound)??,
       id_trunk: row.take_opt("id_trunk").unwrap_or_else(|| Ok(None))?,
       id_branch: row.take_opt("id_branch").unwrap_or_else(|| Ok(None))?,
-      id_address: row.take_opt("id_address").unwrap_or_else(|| Ok(0))?,
-      id_bundle: row.take_opt("id_bundle").unwrap_or_else(|| Ok(0))?,
+      id_address: row.take_opt("id_address").unwrap_or_else(|| Ok(None))?,
+      id_bundle: row.take_opt("id_bundle").unwrap_or_else(|| Ok(None))?,
       tag: row.take_opt("tag").unwrap_or_else(|| Ok(String::from("")))?,
       value: row.take_opt("value").unwrap_or_else(|| Ok(0))?,
       timestamp: row.take_opt("timestamp").unwrap_or_else(|| Ok(0.0))?,
@@ -193,10 +194,8 @@ impl TransactionRecord {
   impl_getter!(id_tx, u64);
   impl_getter!(id_trunk, Option<u64>);
   impl_getter!(id_branch, Option<u64>);
-  impl_setter!(id_trunk, set_id_trunk, Option<u64>, in super::super);
-  impl_setter!(id_branch, set_id_branch, Option<u64>, in super::super);
-  impl_accessors!(id_address, set_id_address, u64);
-  impl_accessors!(id_bundle, set_id_bundle, u64);
+  impl_getter!(id_address, Option<u64>);
+  impl_getter!(id_bundle, Option<u64>);
   impl_getter!(tag, &str);
   impl_setter!(tag, set_tag, String);
   impl_accessors!(value, set_value, i64);
@@ -221,8 +220,8 @@ impl TransactionRecord {
       id_tx,
       id_trunk: None,
       id_branch: None,
-      id_address: 0,
-      id_bundle: 0,
+      id_address: None,
+      id_bundle: None,
       tag: String::from(""),
       value: 0,
       timestamp: 0.0,
@@ -295,6 +294,19 @@ impl TransactionRecord {
     Ok(results)
   }
 
+  pub fn find_bundle(
+    conn: &mut mysql::Conn,
+    id: u64,
+  ) -> Result<Vec<TransactionRecord>> {
+    let mut results = Vec::new();
+    for row in
+      conn.prep_exec(format!("{} {}", SELECT_QUERY, WHERE_ID_BUNDLE), (id,))?
+    {
+      results.push(TransactionRecord::from_row(&mut row?)?);
+    }
+    Ok(results)
+  }
+
   pub fn mst_timestamp(&self) -> f64 {
     self.timestamp + self.conftime
   }
@@ -307,5 +319,60 @@ impl TransactionRecord {
   pub fn add_weight(&mut self, value: f64) {
     let weight = self.weight;
     self.set_weight(weight + value);
+  }
+
+  pub fn set_id_trunk(
+    &mut self,
+    id_trunk: u64,
+    trunk_index: &mut Option<Vec<u64>>,
+  ) {
+    match self.id_trunk {
+      Some(_) => panic!("`id_trunk` is immutable"),
+      None => {
+        self.fill_index(trunk_index);
+        self.set_modified();
+        self.id_trunk = Some(id_trunk);
+      }
+    }
+  }
+
+  pub fn set_id_branch(
+    &mut self,
+    id_branch: u64,
+    branch_index: &mut Option<Vec<u64>>,
+  ) {
+    match self.id_branch {
+      Some(_) => panic!("`id_branch` is immutable"),
+      None => {
+        self.fill_index(branch_index);
+        self.set_modified();
+        self.id_branch = Some(id_branch);
+      }
+    }
+  }
+
+  pub fn set_id_address(&mut self, id_address: u64) {
+    match self.id_address {
+      Some(_) => panic!("`id_address` is immutable"),
+      None => {
+        self.set_modified();
+        self.id_address = Some(id_address);
+      }
+    }
+  }
+
+  pub fn set_id_bundle(
+    &mut self,
+    id_bundle: u64,
+    bundle_index: &mut Option<Vec<u64>>,
+  ) {
+    match self.id_bundle {
+      Some(_) => panic!("`id_bundle` is immutable"),
+      None => {
+        self.fill_index(bundle_index);
+        self.set_modified();
+        self.id_bundle = Some(id_bundle);
+      }
+    }
   }
 }
