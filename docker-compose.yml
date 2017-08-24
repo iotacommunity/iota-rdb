@@ -18,6 +18,7 @@ services:
     ]
     environment:
       RUST_BACKTRACE: 1
+    dns: 8.8.8.8
     networks:
       - mysql
 
@@ -29,6 +30,7 @@ services:
       - "3306:3306"
     volumes:
       - mysql:/var/lib/mysql
+    dns: 8.8.8.8
     networks:
       - mysql
 
