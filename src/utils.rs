@@ -1,4 +1,4 @@
-use iota_curl_cpu;
+use iota_kerl;
 use iota_sign;
 use iota_trytes;
 use mysql;
@@ -64,12 +64,12 @@ pub fn trits_string(number: isize, length: usize) -> Option<String> {
 
 pub fn trits_checksum(source: &str) -> Option<String> {
   let mut checksum = [0; iota_sign::CHECKSUM_LEN];
-  let mut curl = iota_curl_cpu::CpuCurl::default();
+  let mut kerl = iota_kerl::Kerl::default();
   let trits: Vec<_> = source
     .chars()
     .flat_map(iota_trytes::char_to_trits)
     .cloned()
     .collect();
-  iota_sign::trits_checksum(&trits, &mut checksum, &mut curl);
+  iota_sign::trits_checksum(&trits, &mut checksum, &mut kerl);
   iota_trytes::trits_to_string(&checksum)
 }

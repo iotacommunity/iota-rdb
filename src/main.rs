@@ -4,7 +4,7 @@
 
 #[macro_use]
 extern crate clap;
-extern crate iota_curl_cpu;
+extern crate iota_kerl;
 extern crate iota_sign;
 extern crate iota_trytes;
 extern crate log4rs;

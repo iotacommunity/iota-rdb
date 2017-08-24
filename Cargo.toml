@@ -19,8 +19,8 @@ features = ['alloc']
 [dependencies.iota-sign]
 path = "iota.rs/sign"
 
-[dependencies.iota-curl-cpu]
-path = "iota.rs/curl-cpu"
+[dependencies.iota-kerl]
+path = "iota.rs/kerl"
 
 [features]
 default = []

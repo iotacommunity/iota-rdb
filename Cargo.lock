@@ -4,7 +4,7 @@ version = "0.1.0"
 dependencies = [
  "clap 2.26.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "clippy 0.0.153 (registry+https://github.com/rust-lang/crates.io-index)",
- "iota-curl-cpu 0.1.0",
+ "iota-kerl 0.1.0",
  "iota-sign 0.1.0",
  "iota-trytes 0.1.0",
  "log 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -216,11 +216,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "iota-curl-cpu"
+name = "iota-kerl"
 version = "0.1.0"
 dependencies = [
  "iota-curl 0.1.0",
- "iota-tmath 0.1.0",
  "iota-trytes 0.1.0",
 ]
 
@@ -229,7 +228,7 @@ name = "iota-sign"
 version = "0.1.0"
 dependencies = [
  "iota-curl 0.1.0",
- "iota-curl-cpu 0.1.0",
+ "iota-kerl 0.1.0",
  "iota-tmath 0.1.0",
  "iota-trytes 0.1.0",
 ]
