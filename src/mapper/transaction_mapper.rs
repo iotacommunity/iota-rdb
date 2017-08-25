@@ -218,21 +218,25 @@ impl TransactionMapper {
     }
     f(conn, id).map(|found| {
       debug!("Mutex check at line {}", line!());
-      let mut records = self.records.write().unwrap();
-      debug!("Mutex check at line {}", line!());
-      let mut hashes = self.hashes.write().unwrap();
-      debug!("Mutex check at line {}", line!());
       let mut index = index.lock().unwrap();
       debug!("Mutex check at line {}", line!());
       match *index {
         Some(_) => index,
         None => {
+          debug!("Mutex check at line {}", line!());
+          let mut records = self.records.write().unwrap();
+          debug!("Mutex check at line {}", line!());
+          let mut hashes = self.hashes.write().unwrap();
+          debug!("Mutex check at line {}", line!());
+          let mut indices = self.lock_indices();
+          debug!("Mutex check at line {}", line!());
           let mut ids = found
             .into_iter()
             .map(|record| {
               let id_tx = record.id();
               records.entry(id_tx).or_insert_with(|| {
                 hashes.insert(record.hash().to_owned(), id_tx);
+                Self::fill_indices(&mut indices, &record);
                 Arc::new(Mutex::new(record))
               });
               id_tx
