@@ -6,6 +6,7 @@ use mysql;
 use solid::{Solid, Solidate};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::SystemTime;
+use std::thread;
 use utils::SystemTimeUtils;
 use worker::{ApproveJob, CalculateJob, SolidateJob};
 
@@ -115,25 +116,26 @@ impl TransactionMessage {
         .unwrap_or(id_trunk);
       let branch_index = transaction_mapper.branch_index(branch_index).unwrap();
       let bundle_index = bundle_mapper.transaction_index(id_bundle).unwrap();
-      debug!("Mutex check at line {}", line!());
+      let tid = thread::current().id();
+      debug!("Mutex check at line {} {:?}", line!(), tid);
       let mut trunk_index = trunk_index.lock().unwrap();
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex check at line {} {:?}", line!(), tid);
       let mut branch_index = branch_index.lock().unwrap();
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex check at line {} {:?}", line!(), tid);
       let mut bundle_index = bundle_index.lock().unwrap();
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex check at line {} {:?}", line!(), tid);
       let mut trunk_tx = trunk_tx.lock().unwrap();
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex check at line {} {:?}", line!(), tid);
       let mut branch_tx = branch_tx
         .as_ref()
         .map(|&(_, branch_tx)| branch_tx.lock().unwrap());
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex check at line {} {:?}", line!(), tid);
       let mut current_tx = current_tx.lock().unwrap();
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex check at line {} {:?}", line!(), tid);
       let mut address = address.lock().unwrap();
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex check at line {} {:?}", line!(), tid);
       let mut bundle = bundle.lock().unwrap();
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex check at line {} {:?}", line!(), tid);
       if !current_tx.is_persisted() {
         let timestamp = SystemTime::milliseconds_since_epoch()?;
         process_parent(conn, null_hash, &mut trunk_tx)?;

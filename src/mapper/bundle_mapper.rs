@@ -2,6 +2,7 @@ use super::{BundleRecord, Hashes, Index, Mapper, Record, Records, Result};
 use mysql;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex, RwLock, RwLockWriteGuard};
+use std::thread;
 
 pub struct BundleMapper {
   counter: Mutex<u64>,
@@ -61,9 +62,10 @@ impl Mapper for BundleMapper {
 
 impl BundleMapper {
   pub fn transaction_index(&self, id: u64) -> Option<Arc<Mutex<Index>>> {
-    debug!("Mutex check at line {}", line!());
+    let tid = thread::current().id();
+    debug!("Mutex check at line {} {:?}", line!(), tid);
     let transactions = self.indices[0].read().unwrap();
-    debug!("Mutex check at line {}", line!());
+    debug!("Mutex check at line {} {:?}", line!(), tid);
     transactions.get(&id).cloned()
   }
 }

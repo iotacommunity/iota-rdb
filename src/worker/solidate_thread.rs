@@ -119,10 +119,11 @@ fn solidate(
     if !visited.insert(id) {
       continue;
     }
+    let tid = thread::current().id();
     let record = transaction_mapper.fetch(conn, id)?;
-    debug!("Mutex check at line {}", line!());
+    debug!("Mutex check at line {} {:?}", line!(), tid);
     let mut record = record.lock().unwrap();
-    debug!("Mutex check at line {}", line!());
+    debug!("Mutex check at line {} {:?}", line!(), tid);
     let mut solid = record.solid();
     if !solid.solidate(solidate) {
       continue;

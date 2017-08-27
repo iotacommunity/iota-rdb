@@ -74,17 +74,19 @@ pub trait Mapper: Sized {
   }
 
   fn next_id(&self) -> u64 {
-    debug!("Mutex check at line {}", line!());
+    let tid = thread::current().id();
+    debug!("Mutex check at line {} {:?}", line!(), tid);
     let mut counter = self.counter().lock().unwrap();
-    debug!("Mutex check at line {}", line!());
+    debug!("Mutex check at line {} {:?}", line!(), tid);
     *counter += 1;
     *counter
   }
 
   fn current_id(&self) -> u64 {
-    debug!("Mutex check at line {}", line!());
+    let tid = thread::current().id();
+    debug!("Mutex check at line {} {:?}", line!(), tid);
     let counter = *self.counter().lock().unwrap();
-    debug!("Mutex check at line {}", line!());
+    debug!("Mutex check at line {} {:?}", line!(), tid);
     counter
   }
 
@@ -94,24 +96,27 @@ pub trait Mapper: Sized {
     id: u64,
   ) -> Result<Arc<Mutex<Self::Record>>> {
     let cached = {
-      debug!("Mutex check at line {}", line!());
+      let tid = thread::current().id();
+      debug!("Mutex check at line {} {:?}", line!(), tid);
       let records = self.records().read().unwrap();
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex check at line {} {:?}", line!(), tid);
       records.get(&id).cloned()
     };
     cached.map(Ok).unwrap_or_else(|| {
       Self::Record::find_by_id(conn, id).map(|record| {
-        debug!("Mutex check at line {}", line!());
+        let tid = thread::current().id();
+        debug!("Mutex check at line {} {:?}", line!(), tid);
         let mut records = self.records().write().unwrap();
-        debug!("Mutex check at line {}", line!());
+        debug!("Mutex check at line {} {:?}", line!(), tid);
         records
           .entry(record.id())
           .or_insert_with(|| {
-            debug!("Mutex check at line {}", line!());
+            let tid = thread::current().id();
+            debug!("Mutex check at line {} {:?}", line!(), tid);
             let mut hashes = self.hashes().write().unwrap();
-            debug!("Mutex check at line {}", line!());
+            debug!("Mutex check at line {} {:?}", line!(), tid);
             let mut indices = self.lock_indices();
-            debug!("Mutex check at line {}", line!());
+            debug!("Mutex check at line {} {:?}", line!(), tid);
             hashes.insert(record.hash().to_owned(), record.id());
             Self::fill_indices(&mut indices, &record);
             Arc::new(Mutex::new(record))
@@ -131,24 +136,26 @@ pub trait Mapper: Sized {
     T: FnOnce(u64) -> Result<Self::Record>,
   {
     let cached = {
-      debug!("Mutex check at line {}", line!());
+      let tid = thread::current().id();
+      debug!("Mutex check at line {} {:?}", line!(), tid);
       let records = self.records().read().unwrap();
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex check at line {} {:?}", line!(), tid);
       let hashes = self.hashes().read().unwrap();
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex check at line {} {:?}", line!(), tid);
       hashes
         .get(hash)
         .and_then(|&id| records.get(&id).map(|record| (id, record.clone())))
     };
     cached.map(Ok).unwrap_or_else(|| {
       Self::Record::find_by_hash(conn, hash).and_then(|record| {
-        debug!("Mutex check at line {}", line!());
+        let tid = thread::current().id();
+        debug!("Mutex check at line {} {:?}", line!(), tid);
         let mut records = self.records().write().unwrap();
-        debug!("Mutex check at line {}", line!());
+        debug!("Mutex check at line {} {:?}", line!(), tid);
         let mut hashes = self.hashes().write().unwrap();
-        debug!("Mutex check at line {}", line!());
+        debug!("Mutex check at line {} {:?}", line!(), tid);
         let mut indices = self.lock_indices();
-        debug!("Mutex check at line {}", line!());
+        debug!("Mutex check at line {} {:?}", line!(), tid);
         record.map_or_else(|| f(self.next_id()), Ok).map(|record| {
           let id = record.id();
           let record = records.entry(id).or_insert_with(|| {
@@ -164,16 +171,17 @@ pub trait Mapper: Sized {
 
   fn update(&self, conn: &mut mysql::Conn) -> Result<usize> {
     let mut counter = 0;
+    let tid = thread::current().id();
     let records = {
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex check at line {} {:?}", line!(), tid);
       let records = self.records().read().unwrap();
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex check at line {} {:?}", line!(), tid);
       records.values().cloned().collect::<Vec<_>>()
     };
     for record in records {
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex check at line {} {:?}", line!(), tid);
       let mut record = record.lock().unwrap();
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex check at line {} {:?}", line!(), tid);
       if !record.is_persisted() {
         continue;
       }
@@ -187,13 +195,14 @@ pub trait Mapper: Sized {
   }
 
   fn prune(&self, generation_limit: usize) -> usize {
-    debug!("Mutex check at line {}", line!());
+    let tid = thread::current().id();
+    debug!("Mutex check at line {} {:?}", line!(), tid);
     let mut records = self.records().write().unwrap();
-    debug!("Mutex check at line {}", line!());
+    debug!("Mutex check at line {} {:?}", line!(), tid);
     let mut hashes = self.hashes().write().unwrap();
-    debug!("Mutex check at line {}", line!());
+    debug!("Mutex check at line {} {:?}", line!(), tid);
     let mut indices = self.lock_indices();
-    debug!("Mutex check at line {}", line!());
+    debug!("Mutex check at line {} {:?}", line!(), tid);
     let record_refs = records.values().cloned().collect::<Vec<_>>();
     let index_refs = indices
       .iter()
