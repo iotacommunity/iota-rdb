@@ -29,7 +29,8 @@ impl<'a> UpdateThread<'a> {
     } = self;
     let update_interval = Duration::from_millis(update_interval);
     let mut conn = mysql::Conn::new_retry(mysql_uri, retry_interval);
-    thread::spawn(move || {
+    let thread = thread::Builder::new().name("update".into());
+    let thread = thread.spawn(move || {
       let transaction_mapper = &*transaction_mapper;
       let address_mapper = &*address_mapper;
       let bundle_mapper = &*bundle_mapper;
@@ -59,6 +60,7 @@ impl<'a> UpdateThread<'a> {
         }
       }
     });
+    thread.expect("Thread spawn failure");
   }
 }
 

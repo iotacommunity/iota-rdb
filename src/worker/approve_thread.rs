@@ -54,7 +54,8 @@ impl<'a> ApproveThread<'a> {
       bundle_mapper,
     } = self;
     let mut conn = mysql::Conn::new_retry(mysql_uri, retry_interval);
-    thread::spawn(move || {
+    let thread = thread::Builder::new().name("approve".into());
+    let thread = thread.spawn(move || {
       let transaction_mapper = &*transaction_mapper;
       let bundle_mapper = &*bundle_mapper;
       loop {
@@ -72,6 +73,7 @@ impl<'a> ApproveThread<'a> {
         }
       }
     });
+    thread.expect("Thread spawn failure");
   }
 }
 
@@ -146,9 +148,9 @@ impl ReverseApproveJob {
     if let Some(mst_timestamp) = mst_timestamp {
       let (id_trunk, id_branch) = {
         let transaction = transaction_mapper.fetch(conn, self.id)?;
-        debug!("Mutex check at line {}", line!());
+        debug!("Mutex lock");
         let mut transaction = transaction.lock().unwrap();
-        debug!("Mutex check at line {}", line!());
+        debug!("Mutex acquire");
         approve(&mut transaction, mst_timestamp)?;
         (transaction.id_trunk(), transaction.id_branch())
       };
@@ -186,9 +188,9 @@ impl FrontApproveJob {
         continue;
       }
       let transaction = transaction_mapper.fetch(conn, id)?;
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex lock");
       let mut transaction = transaction.lock().unwrap();
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex acquire");
       if transaction.mst_a() || !transaction.is_persisted() {
         continue;
       }
@@ -236,9 +238,9 @@ impl MilestoneApproveJob {
       {
         for &id in index {
           let record = transaction_mapper.fetch(conn, id)?;
-          debug!("Mutex check at line {}", line!());
+          debug!("Mutex lock");
           let mut record = record.lock().unwrap();
-          debug!("Mutex check at line {}", line!());
+          debug!("Mutex acquire");
           record.set_is_mst(true);
           if !record.mst_a() {
             if let (Some(id_trunk), Some(id_branch)) =
@@ -265,9 +267,9 @@ fn approved_child(
 ) -> Result<Option<f64>> {
   for &id in index {
     let record = transaction_mapper.fetch(conn, id)?;
-    debug!("Mutex check at line {}", line!());
+    debug!("Mutex lock");
     let record = record.lock().unwrap();
-    debug!("Mutex check at line {}", line!());
+    debug!("Mutex acquire");
     if record.mst_a() {
       return Ok(Some(record.mst_timestamp()));
     }

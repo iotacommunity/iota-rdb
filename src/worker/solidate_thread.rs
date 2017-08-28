@@ -31,7 +31,8 @@ impl<'a> SolidateThread<'a> {
       transaction_mapper,
     } = self;
     let mut conn = mysql::Conn::new_retry(mysql_uri, retry_interval);
-    thread::spawn(move || {
+    let thread = thread::Builder::new().name("solidate".into());
+    let thread = thread.spawn(move || {
       let transaction_mapper = &*transaction_mapper;
       loop {
         let job = solidate_rx.recv().expect("Thread communication failure");
@@ -48,6 +49,7 @@ impl<'a> SolidateThread<'a> {
         }
       }
     });
+    thread.expect("Thread spawn failure");
   }
 }
 
@@ -120,9 +122,9 @@ fn solidate(
       continue;
     }
     let record = transaction_mapper.fetch(conn, id)?;
-    debug!("Mutex check at line {}", line!());
+    debug!("Mutex lock");
     let mut record = record.lock().unwrap();
-    debug!("Mutex check at line {}", line!());
+    debug!("Mutex acquire");
     let mut solid = record.solid();
     if !solid.solidate(solidate) {
       continue;

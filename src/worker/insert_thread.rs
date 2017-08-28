@@ -42,7 +42,8 @@ impl<'a> InsertThread<'a> {
     let mut conn = mysql::Conn::new_retry(mysql_uri, retry_interval);
     let null_hash = utils::trits_string(0, HASH_SIZE)
       .expect("Can't convert null_hash to trits");
-    thread::spawn(move || {
+    let thread = thread::Builder::new().name("insert".into());
+    let thread = thread.spawn(move || {
       let transaction_mapper = &*transaction_mapper;
       let address_mapper = &*address_mapper;
       let bundle_mapper = &*bundle_mapper;
@@ -95,5 +96,6 @@ impl<'a> InsertThread<'a> {
         }
       }
     });
+    thread.expect("Thread spawn failure");
   }
 }

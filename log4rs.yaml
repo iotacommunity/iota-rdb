@@ -3,6 +3,8 @@ refresh_rate: 30 seconds
 appenders:
   stdout:
     kind: console
+    encoder:
+      pattern: "{d} {l} {T}:{f}:{L} - {m}{n}"
 
 root:
   level: info

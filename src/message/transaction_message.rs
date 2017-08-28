@@ -115,25 +115,25 @@ impl TransactionMessage {
         .unwrap_or(id_trunk);
       let branch_index = transaction_mapper.branch_index(branch_index).unwrap();
       let bundle_index = bundle_mapper.transaction_index(id_bundle).unwrap();
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex lock");
       let mut trunk_index = trunk_index.lock().unwrap();
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex lock/acquire");
       let mut branch_index = branch_index.lock().unwrap();
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex lock/acquire");
       let mut bundle_index = bundle_index.lock().unwrap();
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex lock/acquire");
       let mut trunk_tx = trunk_tx.lock().unwrap();
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex lock/acquire");
       let mut branch_tx = branch_tx
         .as_ref()
         .map(|&(_, branch_tx)| branch_tx.lock().unwrap());
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex lock/acquire");
       let mut current_tx = current_tx.lock().unwrap();
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex lock/acquire");
       let mut address = address.lock().unwrap();
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex lock/acquire");
       let mut bundle = bundle.lock().unwrap();
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex acquire");
       if !current_tx.is_persisted() {
         let timestamp = SystemTime::milliseconds_since_epoch()?;
         process_parent(conn, null_hash, &mut trunk_tx)?;

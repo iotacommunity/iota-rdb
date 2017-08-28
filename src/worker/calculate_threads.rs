@@ -36,14 +36,15 @@ impl<'a> CalculateThreads<'a> {
       let mut conn = mysql::Conn::new_retry(mysql_uri, retry_interval);
       let transaction_mapper = transaction_mapper.clone();
       let calculate_rx = calculate_rx.clone();
-      thread::spawn(move || {
+      let thread = thread::Builder::new().name(format!("calculate#{}", i));
+      let thread = thread.spawn(move || {
         let transaction_mapper = &*transaction_mapper;
         let calculate_rx = &*calculate_rx;
         loop {
           let job = {
-            debug!("Mutex check at line {}", line!());
+            debug!("Mutex lock");
             let rx = calculate_rx.lock().unwrap();
-            debug!("Mutex check at line {}", line!());
+            debug!("Mutex acquire");
             rx.recv().expect("Thread communication failure")
           };
           let duration = Instant::now();
@@ -60,6 +61,7 @@ impl<'a> CalculateThreads<'a> {
           }
         }
       });
+      thread.expect("Thread spawn failure");
     }
   }
 }
@@ -159,9 +161,9 @@ fn calculate_back(
       continue;
     }
     let transaction = transaction_mapper.fetch(conn, id)?;
-    debug!("Mutex check at line {}", line!());
+    debug!("Mutex lock");
     let mut transaction = transaction.lock().unwrap();
-    debug!("Mutex check at line {}", line!());
+    debug!("Mutex acquire");
     if let Some(id_trunk) = transaction.id_trunk() {
       nodes.push_front(id_trunk);
     }

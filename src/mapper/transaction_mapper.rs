@@ -63,17 +63,17 @@ impl Mapper for TransactionMapper {
     indices[1].insert(record.id(), Arc::new(Mutex::new(inner)));
     if let Some(id_trunk) = record.id_trunk() {
       if let Some(index) = indices[0].get(&id_trunk) {
-        debug!("Mutex check at line {}", line!());
+        debug!("Mutex lock");
         let mut index = index.lock().unwrap();
-        debug!("Mutex check at line {}", line!());
+        debug!("Mutex acquire");
         record.fill_index(&mut index);
       }
     }
     if let Some(id_branch) = record.id_branch() {
       if let Some(index) = indices[1].get(&id_branch) {
-        debug!("Mutex check at line {}", line!());
+        debug!("Mutex lock");
         let mut index = index.lock().unwrap();
-        debug!("Mutex check at line {}", line!());
+        debug!("Mutex acquire");
         record.fill_index(&mut index);
       }
     }
@@ -88,11 +88,11 @@ impl TransactionMapper {
   ) -> FetchManyResult {
     input.dedup();
     let cached = {
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex lock");
       let records = self.records.read().unwrap();
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex lock/acquire");
       let hashes = self.hashes.read().unwrap();
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex acquire");
       input
         .iter()
         .filter_map(|&hash| {
@@ -108,13 +108,13 @@ impl TransactionMapper {
       .cloned()
       .collect::<Vec<_>>();
     let found = TransactionRecord::find_by_hashes(conn, missing)?;
-    debug!("Mutex check at line {}", line!());
+    debug!("Mutex lock");
     let mut records = self.records.write().unwrap();
-    debug!("Mutex check at line {}", line!());
+    debug!("Mutex lock/acquire");
     let mut hashes = self.hashes.write().unwrap();
-    debug!("Mutex check at line {}", line!());
+    debug!("Mutex lock/acquire");
     let mut indices = self.lock_indices();
-    debug!("Mutex check at line {}", line!());
+    debug!("Mutex acquire");
     let mut output = input
       .into_iter()
       .map(|hash| {
@@ -157,16 +157,16 @@ impl TransactionMapper {
   }
 
   pub fn trunk_index(&self, id: u64) -> Option<Arc<Mutex<Index>>> {
-    debug!("Mutex check at line {}", line!());
+    debug!("Mutex lock");
     let trunks = self.indices[0].read().unwrap();
-    debug!("Mutex check at line {}", line!());
+    debug!("Mutex acquire");
     trunks.get(&id).cloned()
   }
 
   pub fn branch_index(&self, id: u64) -> Option<Arc<Mutex<Index>>> {
-    debug!("Mutex check at line {}", line!());
+    debug!("Mutex lock");
     let branches = self.indices[1].read().unwrap();
-    debug!("Mutex check at line {}", line!());
+    debug!("Mutex acquire");
     branches.get(&id).cloned()
   }
 
@@ -209,27 +209,27 @@ impl TransactionMapper {
       -> Result<Vec<TransactionRecord>>,
   {
     {
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex lock");
       let guard = index.lock().unwrap();
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex acquire");
       if guard.is_some() {
         return Ok(guard);
       }
     }
     f(conn, id).map(|found| {
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex lock");
       let mut index = index.lock().unwrap();
-      debug!("Mutex check at line {}", line!());
+      debug!("Mutex acquire");
       match *index {
         Some(_) => index,
         None => {
-          debug!("Mutex check at line {}", line!());
+          debug!("Mutex lock");
           let mut records = self.records.write().unwrap();
-          debug!("Mutex check at line {}", line!());
+          debug!("Mutex lock/acquire");
           let mut hashes = self.hashes.write().unwrap();
-          debug!("Mutex check at line {}", line!());
+          debug!("Mutex lock/acquire");
           let mut indices = self.lock_indices();
-          debug!("Mutex check at line {}", line!());
+          debug!("Mutex acquire");
           let mut ids = found
             .into_iter()
             .map(|record| {
