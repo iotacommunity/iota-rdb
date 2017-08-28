@@ -41,10 +41,9 @@ impl<'a> CalculateThreads<'a> {
         let calculate_rx = &*calculate_rx;
         loop {
           let job = {
-            let tid = thread::current().id();
-            debug!("Mutex check at line {} {:?}", line!(), tid);
+            debug!("Mutex check at line {}", line!());
             let rx = calculate_rx.lock().unwrap();
-            debug!("Mutex check at line {} {:?}", line!(), tid);
+            debug!("Mutex check at line {}", line!());
             rx.recv().expect("Thread communication failure")
           };
           let duration = Instant::now();
@@ -160,10 +159,9 @@ fn calculate_back(
       continue;
     }
     let transaction = transaction_mapper.fetch(conn, id)?;
-    let tid = thread::current().id();
-    debug!("Mutex check at line {} {:?}", line!(), tid);
+    debug!("Mutex check at line {}", line!());
     let mut transaction = transaction.lock().unwrap();
-    debug!("Mutex check at line {} {:?}", line!(), tid);
+    debug!("Mutex check at line {}", line!());
     if let Some(id_trunk) = transaction.id_trunk() {
       nodes.push_front(id_trunk);
     }

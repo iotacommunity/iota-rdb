@@ -145,11 +145,10 @@ impl ReverseApproveJob {
     }
     if let Some(mst_timestamp) = mst_timestamp {
       let (id_trunk, id_branch) = {
-        let tid = thread::current().id();
         let transaction = transaction_mapper.fetch(conn, self.id)?;
-        debug!("Mutex check at line {} {:?}", line!(), tid);
+        debug!("Mutex check at line {}", line!());
         let mut transaction = transaction.lock().unwrap();
-        debug!("Mutex check at line {} {:?}", line!(), tid);
+        debug!("Mutex check at line {}", line!());
         approve(&mut transaction, mst_timestamp)?;
         (transaction.id_trunk(), transaction.id_branch())
       };
@@ -187,10 +186,9 @@ impl FrontApproveJob {
         continue;
       }
       let transaction = transaction_mapper.fetch(conn, id)?;
-      let tid = thread::current().id();
-      debug!("Mutex check at line {} {:?}", line!(), tid);
+      debug!("Mutex check at line {}", line!());
       let mut transaction = transaction.lock().unwrap();
-      debug!("Mutex check at line {} {:?}", line!(), tid);
+      debug!("Mutex check at line {}", line!());
       if transaction.mst_a() || !transaction.is_persisted() {
         continue;
       }
@@ -238,10 +236,9 @@ impl MilestoneApproveJob {
       {
         for &id in index {
           let record = transaction_mapper.fetch(conn, id)?;
-          let tid = thread::current().id();
-          debug!("Mutex check at line {} {:?}", line!(), tid);
+          debug!("Mutex check at line {}", line!());
           let mut record = record.lock().unwrap();
-          debug!("Mutex check at line {} {:?}", line!(), tid);
+          debug!("Mutex check at line {}", line!());
           record.set_is_mst(true);
           if !record.mst_a() {
             if let (Some(id_trunk), Some(id_branch)) =
@@ -267,11 +264,10 @@ fn approved_child(
   index: &[u64],
 ) -> Result<Option<f64>> {
   for &id in index {
-    let tid = thread::current().id();
     let record = transaction_mapper.fetch(conn, id)?;
-    debug!("Mutex check at line {} {:?}", line!(), tid);
+    debug!("Mutex check at line {}", line!());
     let record = record.lock().unwrap();
-    debug!("Mutex check at line {} {:?}", line!(), tid);
+    debug!("Mutex check at line {}", line!());
     if record.mst_a() {
       return Ok(Some(record.mst_timestamp()));
     }

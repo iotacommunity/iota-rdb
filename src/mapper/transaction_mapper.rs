@@ -2,7 +2,6 @@ use super::{Hashes, Index, Mapper, Record, Records, Result, TransactionRecord};
 use mysql;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex, MutexGuard, RwLock, RwLockWriteGuard};
-use std::thread;
 
 pub struct TransactionMapper {
   counter: Mutex<u64>,
@@ -64,19 +63,17 @@ impl Mapper for TransactionMapper {
     indices[1].insert(record.id(), Arc::new(Mutex::new(inner)));
     if let Some(id_trunk) = record.id_trunk() {
       if let Some(index) = indices[0].get(&id_trunk) {
-        let tid = thread::current().id();
-        debug!("Mutex check at line {} {:?}", line!(), tid);
+        debug!("Mutex check at line {}", line!());
         let mut index = index.lock().unwrap();
-        debug!("Mutex check at line {} {:?}", line!(), tid);
+        debug!("Mutex check at line {}", line!());
         record.fill_index(&mut index);
       }
     }
     if let Some(id_branch) = record.id_branch() {
       if let Some(index) = indices[1].get(&id_branch) {
-        let tid = thread::current().id();
-        debug!("Mutex check at line {} {:?}", line!(), tid);
+        debug!("Mutex check at line {}", line!());
         let mut index = index.lock().unwrap();
-        debug!("Mutex check at line {} {:?}", line!(), tid);
+        debug!("Mutex check at line {}", line!());
         record.fill_index(&mut index);
       }
     }
@@ -91,12 +88,11 @@ impl TransactionMapper {
   ) -> FetchManyResult {
     input.dedup();
     let cached = {
-      let tid = thread::current().id();
-      debug!("Mutex check at line {} {:?}", line!(), tid);
+      debug!("Mutex check at line {}", line!());
       let records = self.records.read().unwrap();
-      debug!("Mutex check at line {} {:?}", line!(), tid);
+      debug!("Mutex check at line {}", line!());
       let hashes = self.hashes.read().unwrap();
-      debug!("Mutex check at line {} {:?}", line!(), tid);
+      debug!("Mutex check at line {}", line!());
       input
         .iter()
         .filter_map(|&hash| {
@@ -112,14 +108,13 @@ impl TransactionMapper {
       .cloned()
       .collect::<Vec<_>>();
     let found = TransactionRecord::find_by_hashes(conn, missing)?;
-    let tid = thread::current().id();
-    debug!("Mutex check at line {} {:?}", line!(), tid);
+    debug!("Mutex check at line {}", line!());
     let mut records = self.records.write().unwrap();
-    debug!("Mutex check at line {} {:?}", line!(), tid);
+    debug!("Mutex check at line {}", line!());
     let mut hashes = self.hashes.write().unwrap();
-    debug!("Mutex check at line {} {:?}", line!(), tid);
+    debug!("Mutex check at line {}", line!());
     let mut indices = self.lock_indices();
-    debug!("Mutex check at line {} {:?}", line!(), tid);
+    debug!("Mutex check at line {}", line!());
     let mut output = input
       .into_iter()
       .map(|hash| {
@@ -162,18 +157,16 @@ impl TransactionMapper {
   }
 
   pub fn trunk_index(&self, id: u64) -> Option<Arc<Mutex<Index>>> {
-    let tid = thread::current().id();
-    debug!("Mutex check at line {} {:?}", line!(), tid);
+    debug!("Mutex check at line {}", line!());
     let trunks = self.indices[0].read().unwrap();
-    debug!("Mutex check at line {} {:?}", line!(), tid);
+    debug!("Mutex check at line {}", line!());
     trunks.get(&id).cloned()
   }
 
   pub fn branch_index(&self, id: u64) -> Option<Arc<Mutex<Index>>> {
-    let tid = thread::current().id();
-    debug!("Mutex check at line {} {:?}", line!(), tid);
+    debug!("Mutex check at line {}", line!());
     let branches = self.indices[1].read().unwrap();
-    debug!("Mutex check at line {} {:?}", line!(), tid);
+    debug!("Mutex check at line {}", line!());
     branches.get(&id).cloned()
   }
 
@@ -216,30 +209,27 @@ impl TransactionMapper {
       -> Result<Vec<TransactionRecord>>,
   {
     {
-      let tid = thread::current().id();
-      debug!("Mutex check at line {} {:?}", line!(), tid);
+      debug!("Mutex check at line {}", line!());
       let guard = index.lock().unwrap();
-      debug!("Mutex check at line {} {:?}", line!(), tid);
+      debug!("Mutex check at line {}", line!());
       if guard.is_some() {
         return Ok(guard);
       }
     }
     f(conn, id).map(|found| {
-      let tid = thread::current().id();
-      debug!("Mutex check at line {} {:?}", line!(), tid);
+      debug!("Mutex check at line {}", line!());
       let mut index = index.lock().unwrap();
-      debug!("Mutex check at line {} {:?}", line!(), tid);
+      debug!("Mutex check at line {}", line!());
       match *index {
         Some(_) => index,
         None => {
-          let tid = thread::current().id();
-          debug!("Mutex check at line {} {:?}", line!(), tid);
+          debug!("Mutex check at line {}", line!());
           let mut records = self.records.write().unwrap();
-          debug!("Mutex check at line {} {:?}", line!(), tid);
+          debug!("Mutex check at line {}", line!());
           let mut hashes = self.hashes.write().unwrap();
-          debug!("Mutex check at line {} {:?}", line!(), tid);
+          debug!("Mutex check at line {}", line!());
           let mut indices = self.lock_indices();
-          debug!("Mutex check at line {} {:?}", line!(), tid);
+          debug!("Mutex check at line {}", line!());
           let mut ids = found
             .into_iter()
             .map(|record| {
