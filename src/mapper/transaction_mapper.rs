@@ -242,18 +242,17 @@ impl TransactionMapper {
     }
     f(conn, id).map(|found| {
       debug!("Mutex lock");
+      let mut records = self.records.write().unwrap();
+      debug!("Mutex lock/acquire");
+      let mut hashes = self.hashes.write().unwrap();
+      debug!("Mutex lock/acquire");
+      let mut indices = self.lock_indices();
+      debug!("Mutex lock/acquire");
       let mut index = index.lock().unwrap();
       debug!("Mutex acquire");
       match *index {
         Some(_) => (index, skip_index),
         None => {
-          debug!("Mutex lock");
-          let mut records = self.records.write().unwrap();
-          debug!("Mutex lock/acquire");
-          let mut hashes = self.hashes.write().unwrap();
-          debug!("Mutex lock/acquire");
-          let mut indices = self.lock_indices();
-          debug!("Mutex acquire");
           let mut ids = found
             .into_iter()
             .map(|record| {
