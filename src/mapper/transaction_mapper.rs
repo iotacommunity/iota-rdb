@@ -14,6 +14,10 @@ type FetchManyResult = Result<
   Vec<(u64, String, Arc<Mutex<TransactionRecord>>)>,
 >;
 
+type FetchIndexResult<'a> = Result<
+  (MutexGuard<'a, Index>, Option<(usize, u64)>),
+>;
+
 impl Mapper for TransactionMapper {
   type Record = TransactionRecord;
 
@@ -53,6 +57,7 @@ impl Mapper for TransactionMapper {
   fn fill_indices(
     indices: &mut [RwLockWriteGuard<Records<Index>>],
     record: &TransactionRecord,
+    skip_index: Option<(usize, u64)>,
   ) {
     let inner = if record.is_persisted() {
       None
@@ -62,19 +67,25 @@ impl Mapper for TransactionMapper {
     indices[0].insert(record.id(), Arc::new(Mutex::new(inner.clone())));
     indices[1].insert(record.id(), Arc::new(Mutex::new(inner)));
     if let Some(id_trunk) = record.id_trunk() {
-      if let Some(index) = indices[0].get(&id_trunk) {
-        debug!("Mutex lock");
-        let mut index = index.lock().unwrap();
-        debug!("Mutex acquire");
-        record.fill_index(&mut index);
+      match skip_index {
+        Some((0, id)) if id == id_trunk => {}
+        _ => if let Some(index) = indices[0].get(&id_trunk) {
+          debug!("Mutex lock");
+          let mut index = index.lock().unwrap();
+          debug!("Mutex acquire");
+          record.fill_index(&mut index);
+        },
       }
     }
     if let Some(id_branch) = record.id_branch() {
-      if let Some(index) = indices[1].get(&id_branch) {
-        debug!("Mutex lock");
-        let mut index = index.lock().unwrap();
-        debug!("Mutex acquire");
-        record.fill_index(&mut index);
+      match skip_index {
+        Some((1, id)) if id == id_branch => {}
+        _ => if let Some(index) = indices[1].get(&id_branch) {
+          debug!("Mutex lock");
+          let mut index = index.lock().unwrap();
+          debug!("Mutex acquire");
+          record.fill_index(&mut index);
+        },
       }
     }
   }
@@ -144,7 +155,7 @@ impl TransactionMapper {
                   });
                 let id_tx = record.id();
                 hashes.insert(hash.to_owned(), id_tx);
-                Self::fill_indices(&mut indices, &record);
+                Self::fill_indices(&mut indices, &record, None);
                 let wrapper = Arc::new(Mutex::new(record));
                 records.insert(id_tx, wrapper.clone());
                 (id_tx, hash.to_owned(), wrapper)
@@ -175,8 +186,14 @@ impl TransactionMapper {
     conn: &mut mysql::Conn,
     id: u64,
     index: &'a Mutex<Index>,
-  ) -> Result<MutexGuard<'a, Index>> {
-    self.fetch_index(conn, id, index, TransactionRecord::find_trunk)
+  ) -> FetchIndexResult<'a> {
+    self.fetch_index(
+      conn,
+      id,
+      index,
+      Some((0, id)),
+      TransactionRecord::find_trunk,
+    )
   }
 
   pub fn fetch_branch<'a>(
@@ -184,8 +201,14 @@ impl TransactionMapper {
     conn: &mut mysql::Conn,
     id: u64,
     index: &'a Mutex<Index>,
-  ) -> Result<MutexGuard<'a, Index>> {
-    self.fetch_index(conn, id, index, TransactionRecord::find_branch)
+  ) -> FetchIndexResult<'a> {
+    self.fetch_index(
+      conn,
+      id,
+      index,
+      Some((1, id)),
+      TransactionRecord::find_branch,
+    )
   }
 
   pub fn fetch_bundle<'a>(
@@ -193,8 +216,8 @@ impl TransactionMapper {
     conn: &mut mysql::Conn,
     id: u64,
     index: &'a Mutex<Index>,
-  ) -> Result<MutexGuard<'a, Index>> {
-    self.fetch_index(conn, id, index, TransactionRecord::find_bundle)
+  ) -> FetchIndexResult<'a> {
+    self.fetch_index(conn, id, index, None, TransactionRecord::find_bundle)
   }
 
   fn fetch_index<'a, F>(
@@ -202,8 +225,9 @@ impl TransactionMapper {
     conn: &mut mysql::Conn,
     id: u64,
     index: &'a Mutex<Index>,
+    skip_index: Option<(usize, u64)>,
     f: F,
-  ) -> Result<MutexGuard<'a, Index>>
+  ) -> FetchIndexResult<'a>
   where
     F: FnOnce(&mut mysql::Conn, u64)
       -> Result<Vec<TransactionRecord>>,
@@ -213,7 +237,7 @@ impl TransactionMapper {
       let guard = index.lock().unwrap();
       debug!("Mutex acquire");
       if guard.is_some() {
-        return Ok(guard);
+        return Ok((guard, skip_index));
       }
     }
     f(conn, id).map(|found| {
@@ -221,7 +245,7 @@ impl TransactionMapper {
       let mut index = index.lock().unwrap();
       debug!("Mutex acquire");
       match *index {
-        Some(_) => index,
+        Some(_) => (index, skip_index),
         None => {
           debug!("Mutex lock");
           let mut records = self.records.write().unwrap();
@@ -236,7 +260,7 @@ impl TransactionMapper {
               let id_tx = record.id();
               records.entry(id_tx).or_insert_with(|| {
                 hashes.insert(record.hash().to_owned(), id_tx);
-                Self::fill_indices(&mut indices, &record);
+                Self::fill_indices(&mut indices, &record, skip_index);
                 Arc::new(Mutex::new(record))
               });
               id_tx
@@ -245,7 +269,7 @@ impl TransactionMapper {
           ids.sort_unstable();
           ids.dedup();
           *index = Some(ids);
-          index
+          (index, skip_index)
         }
       }
     })

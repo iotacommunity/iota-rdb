@@ -49,6 +49,7 @@ impl Mapper for AddressMapper {
   fn fill_indices(
     _indices: &mut [RwLockWriteGuard<Records<Index>>],
     _record: &AddressRecord,
+    _skip_index: Option<(usize, u64)>,
   ) {
   }
 }

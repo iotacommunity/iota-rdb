@@ -36,6 +36,7 @@ pub trait Mapper: Sized {
   fn fill_indices(
     indices: &mut [RwLockWriteGuard<Records<Index>>],
     record: &Self::Record,
+    skip_index: Option<(usize, u64)>,
   );
 
   fn lock_indices(&self) -> Vec<RwLockWriteGuard<Records<Index>>> {
@@ -92,6 +93,7 @@ pub trait Mapper: Sized {
     &self,
     conn: &mut mysql::Conn,
     id: u64,
+    skip_index: Option<(usize, u64)>,
   ) -> Result<Arc<Mutex<Self::Record>>> {
     let cached = {
       debug!("Mutex lock");
@@ -113,7 +115,7 @@ pub trait Mapper: Sized {
             let mut indices = self.lock_indices();
             debug!("Mutex acquire");
             hashes.insert(record.hash().to_owned(), record.id());
-            Self::fill_indices(&mut indices, &record);
+            Self::fill_indices(&mut indices, &record, skip_index);
             Arc::new(Mutex::new(record))
           })
           .clone()
@@ -153,7 +155,7 @@ pub trait Mapper: Sized {
           let id = record.id();
           let record = records.entry(id).or_insert_with(|| {
             hashes.insert(record.hash().to_owned(), id);
-            Self::fill_indices(&mut indices, &record);
+            Self::fill_indices(&mut indices, &record, None);
             Arc::new(Mutex::new(record))
           });
           (id, record.clone())

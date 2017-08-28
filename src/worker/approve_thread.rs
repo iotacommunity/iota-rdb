@@ -1,10 +1,10 @@
 use super::Result;
 use event;
-use mapper::{BundleMapper, Mapper, Record, TransactionMapper,
+use mapper::{BundleMapper, Index, Mapper, Record, TransactionMapper,
              TransactionRecord};
 use mysql;
 use std::collections::{HashSet, VecDeque};
-use std::sync::{mpsc, Arc};
+use std::sync::{mpsc, Arc, MutexGuard};
 use std::thread;
 use std::time::{Instant, SystemTime};
 use utils::{DurationUtils, MysqlConnUtils, SystemTimeUtils};
@@ -130,24 +130,22 @@ impl ReverseApproveJob {
   ) -> Result<()> {
     let mut mst_timestamp = None;
     if let Some(index) = transaction_mapper.trunk_index(self.id) {
-      if let Some(ref index) =
-        *transaction_mapper.fetch_trunk(conn, self.id, &index)?
-      {
-        mst_timestamp = approved_child(conn, transaction_mapper, index)?;
-      }
+      let (index, skip_index) =
+        transaction_mapper.fetch_trunk(conn, self.id, &index)?;
+      mst_timestamp =
+        approved_child(conn, transaction_mapper, &index, skip_index)?;
     }
     if mst_timestamp.is_none() {
       if let Some(index) = transaction_mapper.branch_index(self.id) {
-        if let Some(ref index) =
-          *transaction_mapper.fetch_branch(conn, self.id, &index)?
-        {
-          mst_timestamp = approved_child(conn, transaction_mapper, index)?;
-        }
+        let (index, skip_index) =
+          transaction_mapper.fetch_branch(conn, self.id, &index)?;
+        mst_timestamp =
+          approved_child(conn, transaction_mapper, &index, skip_index)?;
       }
     }
     if let Some(mst_timestamp) = mst_timestamp {
       let (id_trunk, id_branch) = {
-        let transaction = transaction_mapper.fetch(conn, self.id)?;
+        let transaction = transaction_mapper.fetch(conn, self.id, None)?;
         debug!("Mutex lock");
         let mut transaction = transaction.lock().unwrap();
         debug!("Mutex acquire");
@@ -187,7 +185,7 @@ impl FrontApproveJob {
       if !visited.insert(id) {
         continue;
       }
-      let transaction = transaction_mapper.fetch(conn, id)?;
+      let transaction = transaction_mapper.fetch(conn, id, None)?;
       debug!("Mutex lock");
       let mut transaction = transaction.lock().unwrap();
       debug!("Mutex acquire");
@@ -233,11 +231,11 @@ impl MilestoneApproveJob {
   ) -> Result<()> {
     let mut ids = vec![(self.id_trunk, self.id_branch)];
     if let Some(index) = bundle_mapper.transaction_index(self.id_bundle) {
-      if let Some(ref index) =
-        *transaction_mapper.fetch_bundle(conn, self.id_bundle, &index)?
-      {
+      let (index, skip_index) =
+        transaction_mapper.fetch_bundle(conn, self.id_bundle, &index)?;
+      if let Some(ref index) = *index {
         for &id in index {
-          let record = transaction_mapper.fetch(conn, id)?;
+          let record = transaction_mapper.fetch(conn, id, skip_index)?;
           debug!("Mutex lock");
           let mut record = record.lock().unwrap();
           debug!("Mutex acquire");
@@ -263,15 +261,18 @@ impl MilestoneApproveJob {
 fn approved_child(
   conn: &mut mysql::Conn,
   transaction_mapper: &TransactionMapper,
-  index: &[u64],
+  index: &MutexGuard<Index>,
+  skip_index: Option<(usize, u64)>,
 ) -> Result<Option<f64>> {
-  for &id in index {
-    let record = transaction_mapper.fetch(conn, id)?;
-    debug!("Mutex lock");
-    let record = record.lock().unwrap();
-    debug!("Mutex acquire");
-    if record.mst_a() {
-      return Ok(Some(record.mst_timestamp()));
+  if let Some(ref index) = **index {
+    for &id in index {
+      let record = transaction_mapper.fetch(conn, id, skip_index)?;
+      debug!("Mutex lock");
+      let record = record.lock().unwrap();
+      debug!("Mutex acquire");
+      if record.mst_a() {
+        return Ok(Some(record.mst_timestamp()));
+      }
     }
   }
   Ok(None)

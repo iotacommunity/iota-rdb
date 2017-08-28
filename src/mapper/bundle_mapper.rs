@@ -49,6 +49,7 @@ impl Mapper for BundleMapper {
   fn fill_indices(
     indices: &mut [RwLockWriteGuard<Records<Index>>],
     record: &BundleRecord,
+    _skip_index: Option<(usize, u64)>,
   ) {
     let inner = if record.is_persisted() {
       None
