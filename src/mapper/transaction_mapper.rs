@@ -1,6 +1,7 @@
 use super::{Hashes, Index, Mapper, Record, Records, Result, TransactionRecord};
 use mysql;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
+use std::collections::btree_map::{BTreeMap, Entry};
 use std::sync::{Arc, Mutex, MutexGuard, RwLock, RwLockWriteGuard};
 
 pub struct TransactionMapper {
@@ -15,7 +16,10 @@ type FetchManyResult = Result<
 >;
 
 type FetchIndexResult<'a> = Result<
-  (MutexGuard<'a, Index>, Option<(usize, u64)>),
+  (
+    MutexGuard<'a, Index>,
+    Vec<(u64, Arc<Mutex<TransactionRecord>>)>,
+  ),
 >;
 
 impl Mapper for TransactionMapper {
@@ -229,48 +233,97 @@ impl TransactionMapper {
     f: F,
   ) -> FetchIndexResult<'a>
   where
-    F: FnOnce(&mut mysql::Conn, u64)
+    F: Fn(&mut mysql::Conn, u64)
       -> Result<Vec<TransactionRecord>>,
   {
-    {
-      debug!("Mutex lock");
-      let guard = index.lock().unwrap();
-      debug!("Mutex acquire");
-      if guard.is_some() {
-        return Ok((guard, skip_index));
-      }
-    }
-    f(conn, id).map(|found| {
-      debug!("Mutex lock");
-      let mut records = self.records.write().unwrap();
-      debug!("Mutex lock/acquire");
-      let mut hashes = self.hashes.write().unwrap();
-      debug!("Mutex lock/acquire");
-      let mut indices = self.lock_indices();
-      debug!("Mutex lock/acquire");
-      let mut index = index.lock().unwrap();
-      debug!("Mutex acquire");
-      match *index {
-        Some(_) => (index, skip_index),
-        None => {
-          let mut ids = found
-            .into_iter()
-            .map(|record| {
-              let id_tx = record.id();
-              records.entry(id_tx).or_insert_with(|| {
-                hashes.insert(record.hash().to_owned(), id_tx);
-                Self::fill_indices(&mut indices, &record, skip_index);
-                Arc::new(Mutex::new(record))
-              });
-              id_tx
-            })
-            .collect::<Vec<_>>();
-          ids.sort_unstable();
-          ids.dedup();
-          *index = Some(ids);
-          (index, skip_index)
+    'outer: loop {
+      {
+        let missing = {
+          debug!("Mutex lock");
+          let records = self.records.write().unwrap();
+          debug!("Mutex lock/acquire");
+          let index = index.lock().unwrap();
+          debug!("Mutex acquire");
+          index.as_ref().map(|index| {
+            index
+              .iter()
+              .filter(|id_tx| !records.contains_key(id_tx))
+              .cloned()
+              .collect::<Vec<_>>()
+          })
+        };
+        if let Some(missing) = missing {
+          let found = TransactionRecord::find_by_ids(conn, &missing)?;
+          debug!("Mutex lock");
+          let mut records = self.records.write().unwrap();
+          debug!("Mutex lock/acquire");
+          let mut hashes = self.hashes.write().unwrap();
+          debug!("Mutex lock/acquire");
+          let mut indices = self.lock_indices();
+          debug!("Mutex lock/acquire");
+          let index = index.lock().unwrap();
+          debug!("Mutex acquire");
+          if index.is_some() {
+            let mut results = Vec::new();
+            if let Some(ref index) = *index {
+              for &id_tx in index {
+                let record = match records.entry(id_tx) {
+                  Entry::Occupied(entry) => (id_tx, entry.get().clone()),
+                  Entry::Vacant(entry) => {
+                    match found.iter().find(|record| record.id() == id_tx) {
+                      Some(record) => {
+                        let id_tx = record.id();
+                        hashes.insert(record.hash().to_owned(), id_tx);
+                        Self::fill_indices(&mut indices, record, skip_index);
+                        let wrapper = Arc::new(Mutex::new(record.clone()));
+                        entry.insert(wrapper.clone());
+                        (id_tx, wrapper)
+                      }
+                      None => continue 'outer,
+                    }
+                  }
+                };
+                results.push(record);
+              }
+            }
+            return Ok((index, results));
+          }
         }
       }
-    })
+      match f(conn, id) {
+        Ok(found) => {
+          debug!("Mutex lock");
+          let mut records = self.records.write().unwrap();
+          debug!("Mutex lock/acquire");
+          let mut hashes = self.hashes.write().unwrap();
+          debug!("Mutex lock/acquire");
+          let mut indices = self.lock_indices();
+          debug!("Mutex lock/acquire");
+          let mut index = index.lock().unwrap();
+          debug!("Mutex acquire");
+          if index.is_none() {
+            let mut records = found
+              .into_iter()
+              .map(|record| {
+                let id_tx = record.id();
+                let record = records.entry(id_tx).or_insert_with(|| {
+                  hashes.insert(record.hash().to_owned(), id_tx);
+                  Self::fill_indices(&mut indices, &record, skip_index);
+                  Arc::new(Mutex::new(record))
+                });
+                (id_tx, record.clone())
+              })
+              .collect::<Vec<_>>();
+            records.sort_unstable_by_key(|&(id_tx, _)| id_tx);
+            let mut ids =
+              records.iter().map(|&(id_tx, _)| id_tx).collect::<Vec<_>>();
+            ids.dedup();
+            *index = Some(ids);
+            return Ok((index, records));
+          }
+        }
+        Err(err) => return Err(err),
+      }
+    }
   }
 }

@@ -55,6 +55,10 @@ const SELECT_QUERY: &str = r#"
 const WHERE_HASH_ONE: &str = r"WHERE hash = ?";
 const WHERE_HASH_TWO: &str = r"WHERE hash IN (?, ?)";
 const WHERE_HASH_THREE: &str = r"WHERE hash IN (?, ?, ?)";
+const WHERE_ID_ONE: &str = r"WHERE id_tx = ?";
+const WHERE_ID_TWO: &str = r"WHERE id_tx = (?, ?)";
+const WHERE_ID_FOUR: &str = r"WHERE id_tx = (?, ?, ?, ?)";
+const WHERE_ID_EIGHT: &str = r"WHERE id_tx = (?, ?, ?, ?, ?, ?, ?, ?)";
 const WHERE_ID_TRUNK: &str = r"WHERE id_trunk = ?";
 const WHERE_ID_BRANCH: &str = r"WHERE id_branch = ?";
 const WHERE_ID_BUNDLE: &str = r"WHERE id_bundle = ?";
@@ -263,6 +267,81 @@ impl TransactionRecord {
       };
       for row in rows {
         results.push(TransactionRecord::from_row(&mut row?)?);
+      }
+    }
+    Ok(results)
+  }
+
+  pub fn find_by_ids(
+    conn: &mut mysql::Conn,
+    ids: &[u64],
+  ) -> Result<Vec<TransactionRecord>> {
+    fn collect(
+      results: &mut Vec<TransactionRecord>,
+      rows: &mut mysql::QueryResult,
+    ) -> Result<()> {
+      for row in rows {
+        results.push(TransactionRecord::from_row(&mut row?)?);
+      }
+      Ok(())
+    }
+    let mut results = Vec::new();
+    for ids in ids.chunks(8) {
+      match ids.len() {
+        8 => {
+          collect(
+            &mut results,
+            &mut conn.prep_exec(
+              format!("{} {}", SELECT_QUERY, WHERE_ID_EIGHT),
+              (
+                ids[0],
+                ids[1],
+                ids[2],
+                ids[3],
+                ids[4],
+                ids[5],
+                ids[6],
+                ids[7],
+              ),
+            )?,
+          )?;
+        }
+        _ => for ids in ids.chunks(4) {
+          match ids.len() {
+            4 => {
+              collect(
+                &mut results,
+                &mut conn.prep_exec(
+                  format!("{} {}", SELECT_QUERY, WHERE_ID_FOUR),
+                  (ids[0], ids[1], ids[2], ids[3]),
+                )?,
+              )?;
+            }
+            _ => for ids in ids.chunks(2) {
+              match ids.len() {
+                2 => {
+                  collect(
+                    &mut results,
+                    &mut conn.prep_exec(
+                      format!("{} {}", SELECT_QUERY, WHERE_ID_TWO),
+                      (ids[0], ids[1]),
+                    )?,
+                  )?;
+                }
+                1 => {
+                  collect(
+                    &mut results,
+                    &mut conn.prep_exec(
+                      format!("{} {}", SELECT_QUERY, WHERE_ID_ONE),
+                      (ids[0],),
+                    )?,
+                  )?;
+                }
+                _ => unreachable!(),
+              }
+            },
+          }
+        },
       }
     }
     Ok(results)
