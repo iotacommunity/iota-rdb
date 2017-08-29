@@ -1,4 +1,5 @@
-use super::{Hashes, Index, Mapper, Record, Records, Result, TransactionRecord};
+use super::{Error, Hashes, Index, Mapper, Record, Records, Result,
+            TransactionRecord};
 use mysql;
 use std::collections::HashMap;
 use std::collections::btree_map::{BTreeMap, Entry};
@@ -279,7 +280,11 @@ impl TransactionMapper {
                         entry.insert(wrapper.clone());
                         (id_tx, wrapper)
                       }
-                      None => continue 'outer,
+                      None => if missing.contains(&id_tx) {
+                        return Err(Error::RecordNotFound(id_tx));
+                      } else {
+                        continue 'outer;
+                      },
                     }
                   }
                 };
