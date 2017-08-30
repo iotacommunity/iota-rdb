@@ -122,7 +122,7 @@ impl TransactionMapper {
       .iter()
       .filter(|&hash| !cached.contains_key(hash))
       .cloned()
-      .collect::<Vec<_>>();
+      .collect();
     let found = TransactionRecord::find_by_hashes(conn, missing)?;
     debug!("Mutex lock");
     let mut records = self.records.write().unwrap();
@@ -237,7 +237,7 @@ impl TransactionMapper {
     F: Fn(&mut mysql::Conn, u64)
       -> Result<Vec<TransactionRecord>>,
   {
-    'outer: loop {
+    'retry: loop {
       {
         let missing = {
           debug!("Mutex lock");
@@ -245,11 +245,31 @@ impl TransactionMapper {
           debug!("Mutex lock/acquire");
           let index = index.lock().unwrap();
           debug!("Mutex acquire");
-          index.as_ref().map(|index| {
+          let mut results = index.as_ref().map(|index| {
             index
               .iter()
-              .filter(|id_tx| !records.contains_key(id_tx))
-              .cloned()
+              .map(|&id_tx| (id_tx, records.get(&id_tx).cloned()))
+              .collect::<Vec<_>>()
+          });
+          if let Some(records) = results {
+            if records.iter().all(|&(_, ref record)| record.is_some()) {
+              let results = records
+                .into_iter()
+                .filter_map(
+                  |(id_tx, record)| record.map(|record| (id_tx, record)),
+                )
+                .collect();
+              return Ok((index, results));
+            }
+            results = Some(records);
+          }
+          results.map(|index| {
+            index
+              .into_iter()
+              .filter_map(|(id_tx, record)| match record {
+                Some(_) => None,
+                None => Some(id_tx),
+              })
               .collect::<Vec<_>>()
           })
         };
@@ -283,7 +303,7 @@ impl TransactionMapper {
                       None => if missing.contains(&id_tx) {
                         return Err(Error::RecordNotFound(id_tx));
                       } else {
-                        continue 'outer;
+                        continue 'retry;
                       },
                     }
                   }
